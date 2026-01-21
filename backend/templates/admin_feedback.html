@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback & Ratings - Sign-Lingo Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f8fbff 0%, #e8f4fc 50%, #dceef8 100%);
+            min-height: 100vh;
+            display: flex;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: #FFFBF7;
+            z-index: 10;
+            border-right: 1px solid #e0e0e0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: #e8f8f0;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .logo-subtitle {
+            font-size: 11px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-menu {
+            list-style: none;
+            flex: 1;
+        }
+
+        .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #5f6368;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: #FDF8F3;
+            color: #1a1a2e;
+        }
+
+        .nav-link.active {
+            background: #e8f8f0;
+            color: #2ECC71;
+        }
+
+        .logout-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: none;
+            background: none;
+            color: #e74c3c;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+        }
+
+        .logout-btn:hover {
+            background: #fee2e2;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            padding: 32px;
+        }
+
+        .header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        /* Rating Overview */
+        .rating-overview {
+            background: #FFFBF7;
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            border: 1px solid #E8E0D8;
+            display: flex;
+            gap: 48px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .rating-score {
+            text-align: center;
+        }
+
+        .score-value {
+            font-size: 48px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .stars {
+            color: #f1c40f;
+            font-size: 20px;
+            margin: 8px 0;
+        }
+
+        .review-count {
+            color: #2ECC71;
+            font-size: 14px;
+        }
+
+        .rating-bars {
+            flex: 1;
+        }
+
+        .rating-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .bar-label {
+            width: 20px;
+            text-align: right;
+            font-weight: 500;
+            color: #5f6368;
+        }
+
+        .bar-track {
+            flex: 1;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: #2ECC71;
+            border-radius: 6px;
+        }
+
+        .bar-percent {
+            width: 40px;
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .filter-select {
+            padding: 10px 16px;
+            border: 1px solid #E8E0D8;
+            border-radius: 8px;
+            background: #FFFBF7;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .pagination-info {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        /* Feedback Cards */
+        .feedback-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .feedback-card {
+            background: #FFFBF7;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #E8E0D8;
+            position: relative;
+            z-index: 1;
+        }
+
+        .feedback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            background: #f0f0f0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .user-details .name {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .user-details .email {
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        .user-details .rating {
+            color: #f1c40f;
+            margin-top: 4px;
+        }
+
+        .feedback-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .category-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-bug {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .badge-general {
+            background: #e8f8f0;
+            color: #2ECC71;
+        }
+
+        .badge-feature {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .feedback-date {
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+
+        .status-select {
+            padding: 6px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .feedback-content {
+            color: #5f6368;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .delete-btn:hover {
+            background: #fee2e2;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .rating-overview {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">🤟</div>
+            <div>
+                <div class="logo-text">Sign-Lingo</div>
+                <div class="logo-subtitle">Admin Portal</div>
+            </div>
+        </div>
+
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="/admin/dashboard" class="nav-link">
+                    <span class="nav-icon">📊</span>
+                    Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="/admin/users" class="nav-link">
+                    <span class="nav-icon">👥</span>
+                    Users
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="/admin/top-performers" class="nav-link">
+                    <span class="nav-icon">🏆</span>
+                    Top Performers
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="/admin/feedback" class="nav-link active">
+                    <span class="nav-icon">💬</span>
+                    Feedback
+                </a>
+            </li>
+        </ul>
+
+        <button class="logout-btn" onclick="logout()">
+            <span>🚪</span>
+            Logout
+        </button>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="header">
+            <h1 class="page-title">Feedback & Ratings</h1>
+            <p class="page-subtitle">View and manage user feedback and platform ratings.</p>
+        </div>
+
+        <!-- Rating Overview -->
+        <div class="rating-overview">
+            <div class="rating-score">
+                <div class="score-value" id="avgRating">0.0</div>
+                <div class="stars" id="avgStars">☆☆☆☆☆</div>
+                <div class="review-count">Based on <span id="totalReviews">0</span> reviews</div>
+            </div>
+            <div class="rating-bars" id="ratingBars">
+                <div class="rating-bar-row">
+                    <span class="bar-label">5</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar5" style="width: 0%"></div></div>
+                    <span class="bar-percent" id="percent5">0%</span>
+                </div>
+                <div class="rating-bar-row">
+                    <span class="bar-label">4</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar4" style="width: 0%"></div></div>
+                    <span class="bar-percent" id="percent4">0%</span>
+                </div>
+                <div class="rating-bar-row">
+                    <span class="bar-label">3</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar3" style="width: 0%"></div></div>
+                    <span class="bar-percent" id="percent3">0%</span>
+                </div>
+                <div class="rating-bar-row">
+                    <span class="bar-label">2</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar2" style="width: 0%"></div></div>
+                    <span class="bar-percent" id="percent2">0%</span>
+                </div>
+                <div class="rating-bar-row">
+                    <span class="bar-label">1</span>
+                    <div class="bar-track"><div class="bar-fill" id="bar1" style="width: 0%"></div></div>
+                    <span class="bar-percent" id="percent1">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <select class="filter-select" id="periodFilter">
+                    <option value="all">All Time</option>
+                    <option value="7days">Last 7 Days</option>
+                    <option value="30days">Last 30 Days</option>
+                    <option value="thisMonth">This Month</option>
+                </select>
+                <select class="filter-select" id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="reviewed">Reviewed</option>
+                </select>
+                <select class="filter-select" id="categoryFilter">
+                    <option value="">All Categories</option>
+                    <option value="general">General</option>
+                    <option value="bug">Bug Report</option>
+                    <option value="feature">Feature Request</option>
+                </select>
+            </div>
+            <div class="pagination-info">
+                Total: <span id="feedbackCount">0</span> | Page 1 of 1
+            </div>
+        </div>
+
+        <!-- Feedback List -->
+        <div class="feedback-list" id="feedbackList">
+            <!-- Feedback cards will be loaded here -->
+        </div>
+
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-state-icon">💬</div>
+            <p>No feedback found</p>
+        </div>
+    </main>
+
+    <script>
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+            window.location.href = '/admin';
+        }
+
+        let currentFeedback = [];
+
+        async function fetchFeedback() {
+            try {
+                const period = document.getElementById('periodFilter').value;
+                const status = document.getElementById('statusFilter').value;
+                const category = document.getElementById('categoryFilter').value;
+                
+                let url = `/admin/api/feedback?period=${period}`;
+                if (status) url += `&status=${status}`;
+                if (category) url += `&category=${category}`;
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentFeedback = data.feedback || [];
+                    renderFeedback(currentFeedback);
+                    updateRatingStats(data.stats);
+                } else if (response.status === 401) {
+                    logout();
+                } else {
+                    renderFeedback([]);
+                    updateRatingStats(null);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                renderFeedback([]);
+                updateRatingStats(null);
+            }
+        }
+
+        function updateRatingStats(stats) {
+            if (!stats) {
+                document.getElementById('avgRating').textContent = '0.0';
+                document.getElementById('avgStars').textContent = '☆☆☆☆☆';
+                document.getElementById('totalReviews').textContent = '0';
+                for (let i = 1; i <= 5; i++) {
+                    document.getElementById(`bar${i}`).style.width = '0%';
+                    document.getElementById(`percent${i}`).textContent = '0%';
+                }
+                return;
+            }
+            
+            document.getElementById('avgRating').textContent = stats.average_rating || '0.0';
+            document.getElementById('totalReviews').textContent = stats.total || 0;
+            
+            // Update stars
+            const rating = Math.round(stats.average_rating || 0);
+            const fullStar = '⭐';
+            const emptyStar = '☆';
+            document.getElementById('avgStars').textContent = fullStar.repeat(rating) + emptyStar.repeat(5 - rating);
+            
+            // Update rating bars
+            const distribution = stats.rating_distribution || {};
+            for (let i = 1; i <= 5; i++) {
+                const percent = distribution[i] || 0;
+                document.getElementById(`bar${i}`).style.width = `${percent}%`;
+                document.getElementById(`percent${i}`).textContent = `${Math.round(percent)}%`;
+            }
+        }
+
+        function renderFeedback(feedbackList) {
+            const container = document.getElementById('feedbackList');
+            const emptyState = document.getElementById('emptyState');
+            
+            document.getElementById('feedbackCount').textContent = feedbackList.length;
+            
+            if (feedbackList.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            container.innerHTML = feedbackList.map(feedback => `
+                <div class="feedback-card" id="feedback-${feedback.id || feedback._id}">
+                    <div class="feedback-header">
+                        <div class="user-info">
+                            <div class="user-avatar">👤</div>
+                            <div class="user-details">
+                                <div class="name">${feedback.user_name || 'Anonymous'}</div>
+                                <div class="email">${feedback.user_email || ''}</div>
+                                <div class="rating">${'⭐'.repeat(feedback.rating || 5)}</div>
+                            </div>
+                        </div>
+                        <div class="feedback-meta">
+                            <span class="category-badge badge-${feedback.category || 'general'}">${getCategoryLabel(feedback.category)}</span>
+                            <span class="feedback-date">${formatDate(feedback.date)}</span>
+                            <select class="status-select" onchange="updateStatus('${feedback.id || feedback._id}', this.value)">
+                                <option value="pending" ${feedback.status === 'pending' ? 'selected' : ''}>Pending</option>
+                                <option value="reviewed" ${feedback.status === 'reviewed' ? 'selected' : ''}>Reviewed</option>
+                            </select>
+                            <button class="delete-btn" onclick="deleteFeedback('${feedback.id || feedback._id}')">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="feedback-content">
+                        ${feedback.message || 'No message provided'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getCategoryLabel(category) {
+            const labels = {
+                'general': 'GENERAL',
+                'bug': 'BUG REPORT',
+                'feature': 'FEATURE'
+            };
+            return labels[category] || (category || 'GENERAL').toUpperCase();
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        async function updateStatus(id, status) {
+            try {
+                const response = await fetch(`/admin/api/feedback/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status })
+                });
+                
+                if (response.ok) {
+                    // Update local data
+                    const feedback = currentFeedback.find(f => (f.id || f._id) === id);
+                    if (feedback) feedback.status = status;
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        async function deleteFeedback(id) {
+            if (confirm('Are you sure you want to delete this feedback?')) {
+                try {
+                    const response = await fetch(`/admin/api/feedback/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        // Remove from DOM
+                        const card = document.getElementById(`feedback-${id}`);
+                        if (card) card.remove();
+                        
+                        // Update count
+                        currentFeedback = currentFeedback.filter(f => (f.id || f._id) !== id);
+                        document.getElementById('feedbackCount').textContent = currentFeedback.length;
+                        
+                        // Show empty state if no feedback left
+                        if (currentFeedback.length === 0) {
+                            document.getElementById('emptyState').style.display = 'block';
+                        }
+                        
+                        // Refresh to update stats
+                        fetchFeedback();
+                    }
+                } catch (error) {
+                    console.error('Error deleting feedback:', error);
+                }
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+            window.location.href = '/admin';
+        }
+
+        // Apply filters
+        document.getElementById('periodFilter').addEventListener('change', fetchFeedback);
+        document.getElementById('statusFilter').addEventListener('change', fetchFeedback);
+        document.getElementById('categoryFilter').addEventListener('change', fetchFeedback);
+
+        // Initial load
+        fetchFeedback();
+    </script>
+</body>
+</html>
