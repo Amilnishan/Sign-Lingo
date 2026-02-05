@@ -430,3 +430,92 @@ that enhance both accuracy and user engagement. Ultimately, this user-centered e
 ensures the system is efficient and well-suited to handheld learning. Iterative testing of features
 like ”Weakness Mode” ensures the final product functions technically and effectively addresses
 the challenges of passive learning by providing reliable, real-time feedback.
+
+
+# One-Handed ASL Words for Mobile App
+
+## Prioritized List (50 One-Handed Signs)
+
+This list focuses on **one-handed ASL signs** suitable for mobile app where users hold the phone with one hand and sign with the other.
+
+---
+
+✅ Category 1: Greetings & Basics
+
+No changes needed here, just filled in the missing descriptions.
+
+ID	Word	Description	Difficulty
+1	HELLO	Wave hand side to side	Easy
+2	GOODBYE	Open hand wave	Easy
+3	YES	Fist nodding up/down	Easy
+4	NO	Index/middle fingers snap	Easy
+5	PLEASE	Circular motion on chest (one hand)	Easy
+6	THANK_YOU	Hand from chin forward	Easy
+7	SORRY	Fist rub chest in circle	Easy
+8	OK	O-shape with thumb and index	Easy
+9	FINE	5-hand (open palm) thumb taps chest	Easy
+10	WELCOME	Hand sweep toward body	Easy
+
+✅ Category 2: Personal & Pronouns
+
+Filled in the missing descriptions. Note: CHILD usually uses two hands (patting heads), so I swapped it for BOY which is strictly one-handed.
+
+ID	Word	Description	Difficulty
+11	ME/I	Point to chest	Easy
+12	YOU	Point forward	Easy
+13	HE/SHE	Point to side	Easy
+14	MY	Palm on chest	Easy
+15	YOUR	Point palm forward	Easy
+16	MOTHER	Thumb on chin (5-hand)	Easy
+17	FATHER	Thumb on forehead (5-hand)	Easy
+18	CHILD	Hand grabs imaginary cap at forehead	Easy
+19	UNCLE	U-hand shakes at temple	Easy
+20	AUNT	A-hand circles at cheek	Easy
+
+✅ Category 3: Emotions & States
+
+Replaced 2-handed signs (Happy, Sad, Love, Tired, Sick) with strictly one-handed emotional/state signs.
+
+ID	Word	Description	Difficulty
+21	PROUD	Thumb draws line up chest	Easy
+22	LONELY	Index finger circles near lips	Easy
+23	MAD	Claw hand from face	Medium
+24	FUNNY	Index & middle fingers brush nose	Easy
+25	LIKE	Pull from chest (one hand)	Medium
+26	GOOD	Hand from chin down	Easy
+27	BAD	Hand flip down from chin	Easy
+28	HUNGRY	C-hand down throat	Medium
+29	THIRSTY	Index finger tracks down throat	Easy
+30	HOT	Claw hand throws "heat" from mouth	Easy
+
+✅ Category 4: Questions, Time & Directions
+
+Replaced 2-handed signs (What, When, How, Now) with your extra Directional words.
+
+ID	Word	Description	Difficulty
+31	SOON	F-hand (thumb/index circle) taps chin	Easy
+32	WHO	Circle index around lips	Medium
+33	WHERE	Wave index side to side	Easy
+34	SAME	Y-hand slides side to side	Easy
+35	WHY	Y-hand from forehead	Medium
+36	LEFT	L-hand moves to the left	Easy
+37	RIGHT	R-hand moves to the right	Easy
+38	LATER	L-hand forward (thumb pivot)	Easy
+39	YESTERDAY	Thumb on cheek backward	Medium
+40	TOMORROW	Thumb on cheek forward	Medium
+
+✅ Category 5: Important & Daily Words
+
+Replaced 2-handed signs (Help, School, Work) with your extra True/False words and other one-handed essentials.
+
+ID	Word	Description	Difficulty
+41	TRUE	Index finger moves forward from lips	Easy
+42	WATER	W-hand taps chin	Easy
+43	FOOD	Fingers to mouth (squashed O)	Easy
+44	HOME	Fingers from mouth to cheek	Medium
+45	FALSE	Index finger brushes past nose	Easy
+46	NEED	X-hand (hook) moves down	Easy
+47	PHONE	Y-hand at ear	Easy
+48	BATHROOM	T-hand shakes side to side	Easy
+49	FINISH	5-hand flips out (one hand variation)	Easy
+50	UNDERSTAND	Flick index finger up at forehead	Easy

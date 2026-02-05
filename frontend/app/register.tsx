@@ -1,12 +1,13 @@
 // frontend/app/register.tsx
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import { Video, ResizeMode } from 'expo-av';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
+import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 
 const { width, height } = Dimensions.get('window'); 
 
@@ -16,6 +17,14 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Inline validation error states
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  
+  // Custom alert hook
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   const validateFullName = (name: string): boolean => {
     // Minimum 3 characters, alphabets only (capital or non-capital), spaces allowed
@@ -23,54 +32,85 @@ export default function RegisterScreen() {
     return namePattern.test(name);
   };
 
-  const validateEmail = (email: string): boolean => {
+  const validateEmail = (emailValue: string): boolean => {
     // Must use @gmail.com
     const emailPattern = /^[a-zA-Z0-9._-]+@gmail\.com$/;
-    return emailPattern.test(email);
+    return emailPattern.test(emailValue);
   };
 
-  const validatePassword = (password: string): boolean => {
+  const validatePassword = (pass: string): boolean => {
     // 8 characters minimum, must contain: uppercase, lowercase, number, special character (@)
-    if (password.length < 8) return false;
+    if (pass.length < 8) return false;
     
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSpecialChar = /[@#$%^&*!]/.test(password);
+    const hasUpperCase = /[A-Z]/.test(pass);
+    const hasLowerCase = /[a-z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSpecialChar = /[@#$%^&*!]/.test(pass);
     
     return hasUpperCase && hasLowerCase && hasNumber && hasSpecialChar;
   };
 
+  // Real-time validation handlers
+  const handleNameChange = (value: string) => {
+    setFullName(value);
+    if (value.length > 0 && !validateFullName(value)) {
+      setNameError('Name must be at least 3 letters (alphabets only)');
+    } else {
+      setNameError('');
+    }
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (value.length > 0 && !validateEmail(value)) {
+      setEmailError('Invalid e-mail. Use a valid Gmail address');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (value.length > 0 && !validatePassword(value)) {
+      setPasswordError('Min 8 chars with uppercase, lowercase, number & special char');
+    } else {
+      setPasswordError('');
+    }
+  };
+
   const handleRegister = async () => {
-    if (!fullName || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
+    // Reset errors
+    setNameError('');
+    setEmailError('');
+    setPasswordError('');
+    
+    let hasError = false;
+
+    if (!fullName) {
+      setNameError('Full name is required');
+      hasError = true;
+    } else if (!validateFullName(fullName)) {
+      setNameError('Name must be at least 3 letters (alphabets only)');
+      hasError = true;
     }
 
-    // Validate full name
-    if (!validateFullName(fullName)) {
-      Alert.alert(
-        'Invalid Name',
-        'Input a Valid Name.'
-      );
-      return;
+    if (!email) {
+      setEmailError('Email is required');
+      hasError = true;
+    } else if (!validateEmail(email)) {
+      setEmailError('Invalid e-mail. Use a valid Gmail address');
+      hasError = true;
     }
 
-    // Validate email
-    if (!validateEmail(email)) {
-      Alert.alert(
-        'Invalid Email',
-        'Please use a valid Gmail address.'
-      );
-      return;
+    if (!password) {
+      setPasswordError('Password is required');
+      hasError = true;
+    } else if (!validatePassword(password)) {
+      setPasswordError('Min 8 chars with uppercase, lowercase, number & special char');
+      hasError = true;
     }
 
-    // Validate password
-    if (!validatePassword(password)) {
-      Alert.alert(
-        'Weak Password',
-        'Password must be at least 8 characters with uppercase, lowercase, numbers, and special characters (@#$%^&*!).'
-      );
+    if (hasError) {
       return;
     }
 
@@ -83,13 +123,14 @@ export default function RegisterScreen() {
       });
 
       if (response.status === 201) {
-        Alert.alert('Success', 'Account created! Please log in.');
-        router.back(); // Go back to Login page
+        showAlert('Success', 'Account created successfully! Please log in.', [
+          { text: 'OK', onPress: () => router.back() }
+        ], 'success');
       }
     } catch (error: any) {
       console.error(error);
       const message = error.response?.data?.message || 'Registration failed';
-      Alert.alert('Error', message);
+      showAlert('Error', message, [{ text: 'OK' }], 'error');
     } finally {
       setLoading(false);
     }
@@ -117,30 +158,39 @@ export default function RegisterScreen() {
 
           {/* Input Fields */}
           <View style={styles.inputContainer}>
-            <TextInput 
-              style={styles.input} 
-              placeholder="Full Name" 
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              value={fullName}
-              onChangeText={setFullName}
-            />
-            <TextInput 
-              style={styles.input} 
-              placeholder="Email Address" 
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-            <TextInput 
-              style={styles.input} 
-              placeholder="Password" 
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, nameError ? styles.inputError : null]} 
+                placeholder="Full Name" 
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                value={fullName}
+                onChangeText={handleNameChange}
+              />
+              {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+            </View>
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, emailError ? styles.inputError : null]} 
+                placeholder="Email Address" 
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={handleEmailChange}
+              />
+              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+            </View>
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, passwordError ? styles.inputError : null]} 
+                placeholder="Password" 
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                secureTextEntry
+                value={password}
+                onChangeText={handlePasswordChange}
+              />
+              {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+            </View>
           </View>
 
           {/* Register Button */}
@@ -160,6 +210,16 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        type={alertConfig.type}
+        onClose={hideAlert}
+      />
     </View>
   );
 }
@@ -213,6 +273,9 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 28,
   },
+  inputWrapper: {
+    width: '100%',
+  },
   input: {
     height: 54,
     borderWidth: 1.5,
@@ -223,6 +286,17 @@ const styles = StyleSheet.create({
     ...Fonts.regular,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     color: '#fff',
+  },
+  inputError: {
+    borderColor: '#E74C3C',
+    borderWidth: 2,
+  },
+  errorText: {
+    color: '#E74C3C',
+    fontSize: 12,
+    ...Fonts.regular,
+    marginTop: 6,
+    marginLeft: 4,
   },
   button: {
     backgroundColor: AppColors.primary,

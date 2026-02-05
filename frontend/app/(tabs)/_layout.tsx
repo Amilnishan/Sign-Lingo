@@ -68,6 +68,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Splash',
+          href: null, // Hide from tab bar - splash screen
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="home"
+        options={{
           title: 'Home',
           tabBarIcon: ({ focused }) => <TabIcon icon={icons.home} focused={focused} />,
         }}

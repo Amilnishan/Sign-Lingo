@@ -6,15 +6,31 @@ import {
   StyleSheet, 
   ScrollView,
   TouchableOpacity,
-  Image,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_URL } from '@/constants/config';
-import { Fonts } from '@/constants/fonts';
-import { AppColors } from '@/constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
+
+// Modern Glow Design System
+const COLORS = {
+  background: '#0F172A',
+  cardBg: '#1E293B',
+  cardBorder: '#334155',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#94A3B8',
+  emerald: '#2ECC71',
+  teal: '#14B8A6',
+  gold: '#FFD700',
+  silver: '#C0C0C0',
+  bronze: '#CD7F32',
+};
 
 interface Player {
   _id: string;
@@ -30,6 +46,7 @@ export default function LeaderboardScreen() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myRank, setMyRank] = useState<number | null>(null);
 
   useEffect(() => {
     loadCurrentUser();
@@ -58,19 +75,20 @@ export default function LeaderboardScreen() {
       
       if (response.data && response.data.players) {
         setPlayers(response.data.players);
+        const rank = response.data.players.findIndex((p: Player) => p._id === currentUserId || p.email === currentUserId);
+        setMyRank(rank >= 0 ? rank + 1 : null);
       }
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
-      // Use mock data if API fails
       setPlayers([
-        { _id: '1', full_name: 'Player1', email: 'player1@test.com', xp: 0 },
-        { _id: '2', full_name: 'Player2', email: 'player2@test.com', xp: 0 },
-        { _id: '3', full_name: 'Player3', email: 'player3@test.com', xp: 0 },
-        { _id: '4', full_name: 'Player4', email: 'player4@test.com', xp: 0 },
-        { _id: '5', full_name: 'Player5', email: 'player5@test.com', xp: 0 },
-        { _id: '6', full_name: 'Player6', email: 'player6@test.com', xp: 0 },
-        { _id: '7', full_name: 'Player7', email: 'player7@test.com', xp: 0 },
-        { _id: '8', full_name: 'Player8', email: 'player8@test.com', xp: 0 },
+        { _id: '1', full_name: 'Alex Champion', email: 'player1@test.com', xp: 2500 },
+        { _id: '2', full_name: 'Sam Runner', email: 'player2@test.com', xp: 2200 },
+        { _id: '3', full_name: 'Jordan Star', email: 'player3@test.com', xp: 1900 },
+        { _id: '4', full_name: 'Taylor Swift', email: 'player4@test.com', xp: 1650 },
+        { _id: '5', full_name: 'Morgan Ace', email: 'player5@test.com', xp: 1400 },
+        { _id: '6', full_name: 'Riley Pro', email: 'player6@test.com', xp: 1200 },
+        { _id: '7', full_name: 'Casey Elite', email: 'player7@test.com', xp: 980 },
+        { _id: '8', full_name: 'Drew Master', email: 'player8@test.com', xp: 750 },
       ]);
     } finally {
       setLoading(false);
@@ -84,124 +102,175 @@ export default function LeaderboardScreen() {
   const topThree = players.slice(0, 3);
   const restPlayers = players.slice(3);
 
-  // Avatar colors based on rank
-  const avatarColors = ['#2ECC71', '#CD7F32', '#E8A87C'];
-
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Leaderboard</Text>
-        <TouchableOpacity style={styles.shareButton}>
-          <Text style={styles.shareIcon}>⤴</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'week' && styles.tabActive]}
-          onPress={() => setActiveTab('week')}
-        >
-          <Text style={[styles.tabText, activeTab === 'week' && styles.tabTextActive]}>
-            This Week
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'allTime' && styles.tabActive]}
-          onPress={() => setActiveTab('allTime')}
-        >
-          <Text style={[styles.tabText, activeTab === 'allTime' && styles.tabTextActive]}>
-            All Time
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.tabSwitcher}>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'week' && styles.tabActive]}
+            onPress={() => setActiveTab('week')}
+          >
+            <Text style={[styles.tabText, activeTab === 'week' && styles.tabTextActive]}>
+              Week
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'allTime' && styles.tabActive]}
+            onPress={() => setActiveTab('allTime')}
+          >
+            <Text style={[styles.tabText, activeTab === 'allTime' && styles.tabTextActive]}>
+              All Time
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2ECC71" />
+          <ActivityIndicator size="large" color={COLORS.emerald} />
         </View>
       ) : (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Podium Section */}
-          <View style={styles.podiumSection}>
-            {/* Second Place */}
-            <View style={styles.podiumPlace}>
-              <Text style={styles.xpText}>{topThree[1]?.xp || 0} XP</Text>
-              <View style={[styles.avatarContainer, styles.avatar2nd]}>
-                <View style={[styles.avatarCircle, { borderColor: '#CD7F32' }]}>
-                  <Text style={styles.avatarEmoji}>👤</Text>
+        <>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            {/* Podium Section with Stage */}
+            <LinearGradient
+              colors={['rgba(46, 204, 113, 0.1)', 'transparent']}
+              style={styles.podiumStage}
+            >
+              <View style={styles.podiumContainer}>
+                {/* Second Place */}
+                <View style={styles.podiumPlayer}>
+                  <View style={[styles.podiumAvatar, styles.avatar2nd]}>
+                    <Text style={styles.podiumAvatarText}>
+                      {topThree[1]?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                    </Text>
+                  </View>
+                  <View style={styles.rankBadge2nd}>
+                    <Text style={styles.rankNumber}>2</Text>
+                  </View>
+                  <Text style={styles.podiumName} numberOfLines={1}>
+                    {topThree[1]?.full_name || 'Player 2'}
+                  </Text>
+                  <View style={styles.xpPill}>
+                    <Ionicons name="flash" size={12} color={COLORS.silver} />
+                    <Text style={[styles.xpPillText, { color: COLORS.silver }]}>
+                      {topThree[1]?.xp || 0}
+                    </Text>
+                  </View>
+                  <View style={[styles.pedestal, styles.pedestal2nd]} />
                 </View>
-                <View style={[styles.rankBadge, styles.rank2nd]}>
-                  <Text style={styles.rankNumber}>2</Text>
+
+                {/* First Place - Winner */}
+                <View style={[styles.podiumPlayer, styles.podiumWinner]}>
+                  <View style={styles.crownContainer}>
+                      <Ionicons name="trophy" size={32} color={COLORS.gold} />
+                    </View>
+                  <View style={[styles.podiumAvatar, styles.avatar1st]}>
+                    <Text style={[styles.podiumAvatarText, styles.winnerAvatarText]}>
+                      {topThree[0]?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                    </Text>
+                  </View>
+                  <View style={styles.rankBadge1st}>
+                    <Text style={styles.rankNumber}>1</Text>
+                  </View>
+                  <Text style={[styles.podiumName, styles.winnerName]} numberOfLines={1}>
+                    {topThree[0]?.full_name || 'Player 1'}
+                  </Text>
+                  <View style={[styles.xpPill, styles.winnerXPPill]}>
+                    <Ionicons name="flash" size={14} color={COLORS.gold} />
+                    <Text style={[styles.xpPillText, { color: COLORS.gold, fontSize: 16 }]}>
+                      {topThree[0]?.xp || 0}
+                    </Text>
+                  </View>
+                  <View style={[styles.pedestal, styles.pedestal1st]} />
+                </View>
+
+                {/* Third Place */}
+                <View style={styles.podiumPlayer}>
+                  <View style={[styles.podiumAvatar, styles.avatar3rd]}>
+                    <Text style={styles.podiumAvatarText}>
+                      {topThree[2]?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                    </Text>
+                  </View>
+                  <View style={styles.rankBadge3rd}>
+                    <Text style={styles.rankNumber}>3</Text>
+                  </View>
+                  <Text style={styles.podiumName} numberOfLines={1}>
+                    {topThree[2]?.full_name || 'Player 3'}
+                  </Text>
+                  <View style={styles.xpPill}>
+                    <Ionicons name="flash" size={12} color={COLORS.bronze} />
+                    <Text style={[styles.xpPillText, { color: COLORS.bronze }]}>
+                      {topThree[2]?.xp || 0}
+                    </Text>
+                  </View>
+                  <View style={[styles.pedestal, styles.pedestal3rd]} />
                 </View>
               </View>
-              <Text style={styles.playerName}>{topThree[1]?.full_name || 'Player2'}</Text>
-              <Text style={styles.playerUsername}>{getUsername(topThree[1] || { full_name: 'Player2' } as Player)}</Text>
+            </LinearGradient>
+
+            {/* Scrollable List (Ranks 4+) */}
+            <View style={styles.listSection}>
+              <Text style={styles.listTitle}>Rankings</Text>
+              {restPlayers.map((player, index) => {
+                const rank = index + 4;
+                const isMe = player._id === currentUserId || player.email === currentUserId;
+                return (
+                  <View 
+                    key={player._id} 
+                    style={[
+                      styles.playerRow,
+                      isMe && styles.playerRowHighlight
+                    ]}
+                  >
+                    <Text style={styles.rankText}>{rank}</Text>
+                    <View style={styles.playerAvatar}>
+                      <Text style={styles.playerAvatarText}>
+                        {player.full_name?.charAt(0)?.toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                    <View style={styles.playerDetails}>
+                      <Text style={styles.playerName}>{player.full_name}</Text>
+                      <Text style={styles.playerUsername}>{getUsername(player)}</Text>
+                    </View>
+                    <Text style={styles.playerXP}>{player.xp}</Text>
+                  </View>
+                );
+              })}
             </View>
 
-            {/* First Place */}
-            <View style={[styles.podiumPlace, styles.firstPlace]}>
-              <Text style={[styles.xpText, styles.xpFirst]}>{topThree[0]?.xp || 0} XP</Text>
-              <View style={[styles.avatarContainer, styles.avatar1st]}>
-                <View style={[styles.avatarCircle, styles.avatarFirst, { borderColor: '#2ECC71' }]}>
-                  <Text style={[styles.avatarEmoji, styles.avatarEmojiFirst]}>👤</Text>
-                </View>
-                <View style={[styles.rankBadge, styles.rank1st]}>
-                  <Text style={styles.rankNumber}>1</Text>
-                </View>
-              </View>
-              <View style={styles.pedestal}>
-                <Image source={require('../../assets/images/medal.png')} style={styles.trophyIconImage} />
-              </View>
-              <Text style={[styles.playerName, styles.nameFirst]}>{topThree[0]?.full_name || 'Player1'}</Text>
-              <Text style={styles.topLearnerBadge}>Top Learner</Text>
-            </View>
+            <View style={{ height: 100 }} />
+          </ScrollView>
 
-            {/* Third Place */}
-            <View style={styles.podiumPlace}>
-              <Text style={styles.xpText}>{topThree[2]?.xp || 0} XP</Text>
-              <View style={[styles.avatarContainer, styles.avatar3rd]}>
-                <View style={[styles.avatarCircle, { borderColor: '#E8A87C' }]}>
-                  <Text style={styles.avatarEmoji}>👤</Text>
-                </View>
-                <View style={[styles.rankBadge, styles.rank3rd]}>
-                  <Text style={styles.rankNumber}>3</Text>
-                </View>
-              </View>
-              <Text style={styles.playerName}>{topThree[2]?.full_name || 'Player3'}</Text>
-              <Text style={styles.playerUsername}>{getUsername(topThree[2] || { full_name: 'Player3' } as Player)}</Text>
-            </View>
-          </View>
-
-          {/* Player List */}
-          <View style={styles.playerList}>
-            {restPlayers.map((player, index) => (
-              <View 
-                key={player._id} 
-                style={[
-                  styles.playerCard,
-                  currentUserId === player._id && styles.playerCardHighlight
-                ]}
+          {/* Fixed "My Ranking" Bar at Bottom */}
+          {myRank && (
+            <View style={styles.myRankBar}>
+              <LinearGradient
+                colors={[COLORS.emerald, COLORS.teal]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.myRankGradient}
               >
-                <Text style={styles.playerRank}>{index + 4}</Text>
-                <View style={styles.playerAvatarSmall}>
-                  <Text style={styles.avatarEmojiSmall}>👤</Text>
+                <View style={styles.myRankContent}>
+                  <View style={styles.myRankLeft}>
+                    <View style={styles.myRankBadge}>
+                      <Text style={styles.myRankNumber}>#{myRank}</Text>
+                    </View>
+                    <Text style={styles.myRankLabel}>Your Rank</Text>
+                  </View>
+                  <View style={styles.myRankRight}>
+                    <Ionicons name="flash" size={18} color="#FFF" />
+                    <Text style={styles.myRankXP}>
+                      {players[myRank - 1]?.xp || 0} XP
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.playerInfo}>
-                  <Text style={styles.playerNameSmall}>{player.full_name}</Text>
-                  <Text style={styles.playerUsernameSmall}>{getUsername(player)}</Text>
-                </View>
-                <Text style={styles.playerXP}>{player.xp} XP</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={{ height: 100 }} />
-        </ScrollView>
+              </LinearGradient>
+            </View>
+          )}
+        </>
       )}
     </View>
   );
@@ -210,72 +279,43 @@ export default function LeaderboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.background,
+    backgroundColor: COLORS.background,
+    paddingTop: 60,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: AppColors.cardBackground,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: AppColors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backIcon: {
-    fontSize: 20,
-    color: AppColors.textPrimary,
+    paddingHorizontal: 20,
+    marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 20,
-    ...Fonts.appName,
-    color: AppColors.textPrimary,
+    fontSize: 32,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+    marginBottom: 16,
   },
-  shareButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: AppColors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shareIcon: {
-    fontSize: 18,
-    color: AppColors.textPrimary,
-  },
-  tabContainer: {
+  tabSwitcher: {
     flexDirection: 'row',
-    marginHorizontal: 20,
-    marginVertical: 16,
-    backgroundColor: AppColors.primaryLight,
-    borderRadius: 25,
+    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+    borderRadius: 16,
     padding: 4,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
   tab: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 22,
     alignItems: 'center',
+    borderRadius: 12,
   },
   tabActive: {
-    backgroundColor: AppColors.primary,
+    backgroundColor: COLORS.emerald,
   },
   tabText: {
+    color: '#94A3B8',
     fontSize: 14,
-    ...Fonts.regular,
-    color: AppColors.textSecondary,
+    fontFamily: 'Nunito-Bold',
   },
   tabTextActive: {
-    color: AppColors.textWhite,
+    color: '#FFF',
   },
   loadingContainer: {
     flex: 1,
@@ -285,175 +325,273 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  podiumSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
+  podiumStage: {
+    paddingVertical: 32,
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
+    marginHorizontal: 16,
+    marginBottom: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 204, 113, 0.2)',
   },
-  podiumPlace: {
+  podiumContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  podiumPlayer: {
+    flex: 1,
     alignItems: 'center',
-    width: 100,
   },
-  firstPlace: {
-    marginBottom: 20,
+  podiumWinner: {
+    marginHorizontal: 8,
   },
-  xpText: {
-    fontSize: 14,
-    ...Fonts.appName,
-    color: AppColors.primary,
-    marginBottom: 8,
+  crownContainer: {
+    position: 'absolute',
+    top: -10,
+    zIndex: 10,
   },
-  xpFirst: {
-    fontSize: 16,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 8,
-  },
-  avatar1st: {},
-  avatar2nd: {},
-  avatar3rd: {},
-  avatarCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: AppColors.primaryLight,
+  podiumAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
+    backgroundColor: COLORS.cardBg,
   },
-  avatarFirst: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+  avatar1st: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderColor: COLORS.gold,
     borderWidth: 4,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 12,
   },
-  avatarEmoji: {
-    fontSize: 30,
+  avatar2nd: {
+    borderColor: COLORS.silver,
   },
-  avatarEmojiFirst: {
+  avatar3rd: {
+    borderColor: COLORS.bronze,
+  },
+  podiumAvatarText: {
+    fontSize: 28,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+  },
+  winnerAvatarText: {
     fontSize: 40,
   },
-  rankBadge: {
+  rankBadge1st: {
     position: 'absolute',
-    bottom: -5,
-    left: '50%',
-    marginLeft: -14,
+    bottom: 48,
+    right: 0,
+    backgroundColor: COLORS.gold,
+    borderRadius: 14,
     width: 28,
     height: 28,
-    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: AppColors.cardBackground,
+    borderColor: COLORS.background,
   },
-  rank1st: {
-    backgroundColor: AppColors.primary,
+  rankBadge2nd: {
+    position: 'absolute',
+    bottom: 48,
+    right: 4,
+    backgroundColor: COLORS.silver,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.background,
   },
-  rank2nd: {
-    backgroundColor: '#CD7F32',
-  },
-  rank3rd: {
-    backgroundColor: '#E8A87C',
+  rankBadge3rd: {
+    position: 'absolute',
+    bottom: 48,
+    right: 4,
+    backgroundColor: COLORS.bronze,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.background,
   },
   rankNumber: {
-    color: AppColors.textWhite,
-    ...Fonts.appName,
-    fontSize: 14,
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'Nunito-Bold',
   },
   pedestal: {
-    backgroundColor: AppColors.primaryLight,
-    width: 80,
-    height: 60,
+    marginTop: 12,
+    borderRadius: 8,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -20,
   },
-  trophyIcon: {
-    fontSize: 28,
+  pedestal1st: {
+    width: 70,
+    height: 70,
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderWidth: 2,
+    borderColor: COLORS.gold,
   },
-  trophyIconImage: {
-    width: 32,
-    height: 32,
+  pedestal2nd: {
+    width: 60,
+    height: 50,
+    backgroundColor: 'rgba(192, 192, 192, 0.15)',
+    borderWidth: 2,
+    borderColor: COLORS.silver,
   },
-  playerName: {
-    fontSize: 14,
-    ...Fonts.regular,
-    color: AppColors.textPrimary,
-    marginTop: 4,
+  pedestal3rd: {
+    width: 60,
+    height: 40,
+    backgroundColor: 'rgba(205, 127, 50, 0.15)',
+    borderWidth: 2,
+    borderColor: COLORS.bronze,
   },
-  nameFirst: {
+  podiumName: {
+    color: '#FFF',
+    fontSize: 13,
+    fontFamily: 'Nunito-Bold',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  winnerName: {
     fontSize: 16,
+    fontFamily: 'Nunito-Bold',
   },
-  playerUsername: {
-    fontSize: 12,
-    color: AppColors.textMuted,
-  },
-  topLearnerBadge: {
-    fontSize: 12,
-    color: AppColors.primary,
-    ...Fonts.appName,
-    marginTop: 2,
-  },
-  playerList: {
-    paddingHorizontal: 20,
-  },
-  playerCard: {
+  xpPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.cardBackground,
-    borderRadius: 20,
-    padding: 16,
+    gap: 4,
+    marginTop: 6,
+  },
+  winnerXPPill: {
+    marginTop: 8,
+  },
+  xpPillText: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Bold',
+  },
+  listSection: {
+    paddingHorizontal: 20,
+  },
+  listTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+    marginBottom: 12,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    padding: 14,
+    borderRadius: 14,
     marginBottom: 10,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  playerCardHighlight: {
-    backgroundColor: AppColors.primaryLight,
+  playerRowHighlight: {
+    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+    borderColor: COLORS.emerald,
     borderWidth: 2,
-    borderColor: AppColors.primary,
   },
-  playerRank: {
+  rankText: {
+    color: '#94A3B8',
     fontSize: 16,
-    ...Fonts.appName,
-    color: AppColors.textMuted,
-    width: 30,
+    fontFamily: 'Nunito-Bold',
+    width: 32,
   },
-  playerAvatarSmall: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: AppColors.primaryLight,
+  playerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 2,
+    borderColor: COLORS.cardBorder,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  avatarEmojiSmall: {
-    fontSize: 24,
+  playerAvatarText: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
   },
-  playerInfo: {
+  playerDetails: {
     flex: 1,
   },
-  playerNameSmall: {
-    fontSize: 16,
-    ...Fonts.regular,
-    color: AppColors.textPrimary,
+  playerName: {
+    color: '#FFF',
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
   },
-  playerUsernameSmall: {
-    fontSize: 13,
-    color: AppColors.textMuted,
+  playerUsername: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    marginTop: 2,
   },
   playerXP: {
+    color: COLORS.emerald,
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+  },
+  myRankBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 204, 113, 0.3)',
+  },
+  myRankGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  myRankContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  myRankLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  myRankBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  myRankNumber: {
+    color: '#FFF',
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+  },
+  myRankLabel: {
+    color: '#FFF',
     fontSize: 16,
-    ...Fonts.appName,
-    color: AppColors.primary,
+    fontFamily: 'Nunito-Bold',
+  },
+  myRankRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  myRankXP: {
+    color: '#FFF',
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
   },
 });

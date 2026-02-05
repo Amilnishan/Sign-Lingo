@@ -4,8 +4,9 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useFonts } from 'expo-font';
 import { 
-  Nunito_600SemiBold as NunitoSemiBold500,
-  Nunito_700Bold as NunitoBold700 
+  Nunito_400Regular,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
 } from '@expo-google-fonts/nunito';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -23,8 +24,9 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   
   const [fontsLoaded] = useFonts({
-    'Nunito-SemiBold': NunitoSemiBold500,
-    'Nunito-Bold': NunitoBold700,
+    'Nunito-Regular': Nunito_400Regular,
+    'Nunito-SemiBold': Nunito_600SemiBold,
+    'Nunito-Bold': Nunito_700Bold,
   });
 
   useEffect(() => {
@@ -43,6 +45,15 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding-step1" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding-step2" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding-step3" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding-step4" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="achievements" options={{ headerShown: false }} />
+        <Stack.Screen name="feedback" options={{ headerShown: false }} />
+        <Stack.Screen name="learning-stats" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />

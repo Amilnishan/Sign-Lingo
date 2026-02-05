@@ -7,19 +7,36 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  Alert,
-  Image
+  Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Fonts } from '@/constants/fonts';
-import { AppColors } from '@/constants/colors';
+import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
+
+// Modern Glow Design System
+const COLORS = {
+  background: '#0F172A',
+  cardBg: '#1E293B',
+  cardBorder: '#334155',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#94A3B8',
+  emerald: '#2ECC71',
+  teal: '#14B8A6',
+  orange: '#F97316',
+  blue: '#3B82F6',
+  purple: '#8B5CF6',
+  gold: '#FFD700',
+};
 
 interface Quest {
   id: string;
   title: string;
   description: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   xpReward: number;
   completed: boolean;
   type: 'practice' | 'vocabulary' | 'quiz';
@@ -32,34 +49,36 @@ export default function DailyQuestScreen() {
   const [quests, setQuests] = useState<Quest[]>([
     {
       id: '1',
-      title: 'Morning Practice',
-      description: '5 min daily practice',
-      icon: '🤟',
-      xpReward: 10,
+      title: 'Speed Round',
+      description: 'Complete in 60 seconds',
+      icon: 'flash',
+      xpReward: 20,
       completed: false,
       type: 'practice'
     },
     {
       id: '2',
-      title: 'Vocabulary Builder',
+      title: 'Master Vocabulary',
       description: 'Learn 5 new signs',
-      icon: '📖',
-      xpReward: 20,
+      icon: 'book',
+      xpReward: 30,
       completed: false,
       type: 'vocabulary'
     },
     {
       id: '3',
-      title: 'Quiz Master',
-      description: 'Weekly review session',
-      icon: '❓',
-      xpReward: 15,
+      title: 'Quiz Champion',
+      description: 'Complete weekly review',
+      icon: 'help-circle',
+      xpReward: 25,
       completed: false,
       type: 'quiz'
     }
   ]);
 
   const [chestAnimation] = useState(new Animated.Value(1));
+  
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   useEffect(() => {
     loadUserData();
@@ -86,7 +105,6 @@ export default function DailyQuestScreen() {
       const today = new Date().toDateString();
       
       if (lastDate !== today) {
-        // Reset quests for new day
         await AsyncStorage.setItem('questDate', today);
         await AsyncStorage.removeItem('dailyQuests');
       } else if (questData) {
@@ -105,33 +123,30 @@ export default function DailyQuestScreen() {
   const animateChest = () => {
     Animated.sequence([
       Animated.timing(chestAnimation, {
-        toValue: 1.1,
-        duration: 150,
+        toValue: 1.2,
+        duration: 200,
         useNativeDriver: true,
       }),
       Animated.timing(chestAnimation, {
         toValue: 1,
-        duration: 150,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start();
   };
 
   const handleStartQuest = async (questId: string) => {
-    // Mark quest as completed (in real app, would navigate to actual lesson)
     const updatedQuests = quests.map(q => 
       q.id === questId ? { ...q, completed: true } : q
     );
     setQuests(updatedQuests);
     await AsyncStorage.setItem('dailyQuests', JSON.stringify(updatedQuests));
     
-    // Award XP
     const quest = quests.find(q => q.id === questId);
     if (quest) {
       const newXP = totalXP + quest.xpReward;
       setTotalXP(newXP);
       
-      // Update user data
       const userData = await AsyncStorage.getItem('userData');
       if (userData) {
         const parsed = JSON.parse(userData);
@@ -139,32 +154,33 @@ export default function DailyQuestScreen() {
         await AsyncStorage.setItem('userData', JSON.stringify(parsed));
       }
       
-      Alert.alert(
+      showAlert(
         '🎉 Quest Complete!',
         `You earned +${quest.xpReward} XP!`,
-        [{ text: 'Awesome!' }]
+        [{ text: 'Awesome!' }],
+        'success'
       );
     }
 
-    // Check if all quests completed
     if (updatedQuests.every(q => q.completed)) {
       animateChest();
       setTimeout(() => {
-        Alert.alert(
+        showAlert(
           '🎁 Daily Chest Unlocked!',
-          'Congratulations! You completed all daily quests!',
-          [{ text: 'Claim Reward' }]
+          'Congratulations! You completed all daily missions!',
+          [{ text: 'Claim Reward' }],
+          'success'
         );
       }, 500);
     }
   };
 
-  const getQuestIconBg = (type: string) => {
+  const getQuestColor = (type: string) => {
     switch (type) {
-      case 'practice': return '#e8f8f0';
-      case 'vocabulary': return '#e8f0f8';
-      case 'quiz': return '#f0f0f0';
-      default: return '#f0f0f0';
+      case 'practice': return COLORS.orange;
+      case 'vocabulary': return COLORS.blue;
+      case 'quiz': return COLORS.purple;
+      default: return COLORS.emerald;
     }
   };
 
@@ -172,142 +188,131 @@ export default function DailyQuestScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.streakContainer}>
-          <Image source={require('../../assets/images/flames.png')} style={styles.streakIcon} />
-          <Text style={styles.streakText}>{streak} Days</Text>
-        </View>
-        <Text style={styles.headerTitle}>Daily Quests</Text>
+        <Text style={styles.headerTitle}>Daily Missions</Text>
         <View style={styles.xpBadge}>
+          <Ionicons name="flash" size={16} color={COLORS.gold} />
           <Text style={styles.xpText}>{totalXP} XP</Text>
         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Progress Card */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
+        {/* Main Progress Card - Treasure Chest */}
+        <LinearGradient
+          colors={allCompleted ? [COLORS.emerald, COLORS.teal] : [`${COLORS.cardBg}E6`, COLORS.cardBg]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.treasureCard}
+        >
+          <View style={styles.treasureHeader}>
             <View>
-              <Text style={styles.progressLabel}>PROGRESS</Text>
-              <Text style={styles.progressTitle}>Daily Goal</Text>
-              <Text style={styles.progressCount}>{completedCount}/{totalCount} Completed</Text>
+              <Text style={[styles.treasureLabel, allCompleted && styles.treasureLabelComplete]}>
+                {allCompleted ? 'COMPLETED!' : 'DAILY GOAL'}
+              </Text>
+              <Text style={[styles.treasureTitle, allCompleted && styles.treasureTitleComplete]}>
+                {allCompleted ? 'Claim Your Reward!' : 'Unlock the Chest'}
+              </Text>
             </View>
-            <Animated.View 
-              style={[
-                styles.chestContainer,
-                { transform: [{ scale: chestAnimation }] }
-              ]}
-            >
-              <View style={[
-                styles.chest,
-                allCompleted && styles.chestUnlocked
-              ]}>
+            <Animated.View style={{ transform: [{ scale: chestAnimation }] }}>
+              <View style={[styles.chestContainer, allCompleted && styles.chestUnlocked]}>
                 <Text style={styles.chestIcon}>{allCompleted ? '🎁' : '📦'}</Text>
               </View>
-              <Text style={[
-                styles.chestStatus,
-                allCompleted && styles.chestStatusUnlocked
-              ]}>
-                {allCompleted ? 'CLAIM!' : 'LOCKED'}
-              </Text>
             </Animated.View>
           </View>
           
+          {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            <View style={styles.progressBarBg}>
+              <LinearGradient
+                colors={[COLORS.emerald, COLORS.teal]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
+              />
             </View>
+            <Text style={[styles.progressText, allCompleted && styles.progressTextComplete]}>
+              {completedCount}/{totalCount} completed
+            </Text>
           </View>
           
-          <Text style={styles.progressHint}>
+          <Text style={[styles.treasureHint, allCompleted && styles.treasureHintComplete]}>
             {allCompleted 
-              ? '🎉 All quests completed! Claim your reward!'
-              : 'Almost there! Unlock the chest today.'}
+              ? '✨ Amazing work! All missions completed!'
+              : `Complete ${totalCount - completedCount} more quest${totalCount - completedCount > 1 ? 's' : ''} to unlock!`}
           </Text>
-        </View>
+        </LinearGradient>
 
-        {/* Today's Tasks */}
-        <View style={styles.tasksSection}>
-          <Text style={styles.sectionTitle}>Today's Tasks</Text>
+        {/* Quest List - Mission Cards */}
+        <View style={styles.questsSection}>
+          <Text style={styles.sectionTitle}>⚔️ Active Missions</Text>
           
-          {quests.map((quest) => (
-            <View 
-              key={quest.id} 
-              style={[
-                styles.questCard,
-                quest.completed && styles.questCardCompleted
-              ]}
-            >
-              <View style={[
-                styles.questIcon,
-                { backgroundColor: getQuestIconBg(quest.type) }
-              ]}>
-                <Text style={styles.questIconText}>{quest.icon}</Text>
-              </View>
-              
-              <View style={styles.questInfo}>
-                <View style={styles.questTitleRow}>
-                  <Text style={[
-                    styles.questTitle,
-                    quest.completed && styles.questTitleCompleted
-                  ]}>
-                    {quest.title}
-                  </Text>
-                  <View style={styles.xpRewardBadge}>
-                    <Text style={styles.xpRewardText}>+{quest.xpReward} XP</Text>
+          {quests.map((quest) => {
+            const questColor = getQuestColor(quest.type);
+            return (
+              <View 
+                key={quest.id} 
+                style={[
+                  styles.questCard,
+                  quest.completed && styles.questCardCompleted
+                ]}
+              >
+                {/* Left: Icon Container */}
+                <View style={[styles.questIconContainer, { backgroundColor: `${questColor}33` }]}>
+                  <Ionicons name={quest.icon} size={28} color={questColor} />
+                </View>
+                
+                {/* Middle: Quest Info */}
+                <View style={styles.questInfo}>
+                  <View style={styles.questTitleRow}>
+                    <Text style={[
+                      styles.questTitle,
+                      quest.completed && styles.questTitleCompleted
+                    ]}>
+                      {quest.title}
+                    </Text>
+                  </View>
+                  <Text style={styles.questDescription}>{quest.description}</Text>
+                  <View style={styles.xpBadgeSmall}>
+                    <Ionicons name="star" size={12} color={COLORS.gold} />
+                    <Text style={styles.xpBadgeText}>+{quest.xpReward} XP</Text>
                   </View>
                 </View>
-                <Text style={styles.questDescription}>{quest.description}</Text>
+                
+                {/* Right: Action Button */}
+                {quest.completed ? (
+                  <View style={styles.claimedBadge}>
+                    <Ionicons name="checkmark-circle" size={32} color={COLORS.emerald} />
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.startButton}
+                    onPress={() => handleStartQuest(quest.id)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={[questColor, questColor]}
+                      style={styles.startButtonGradient}
+                    >
+                      <Text style={styles.startButtonText}>Start</Text>
+                      <Ionicons name="arrow-forward" size={16} color="#FFF" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
               </View>
-              
-              {quest.completed ? (
-                <View style={styles.completedBadge}>
-                  <Text style={styles.checkmark}>✓</Text>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.startButton}
-                  onPress={() => handleStartQuest(quest.id)}
-                >
-                  <Text style={styles.startButtonText}>Start</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
 
-        {/* Bonus Section */}
-        <View style={styles.bonusSection}>
-          <Text style={styles.sectionTitle}>Bonus Challenges</Text>
-          
-          <View style={styles.bonusCard}>
-            <View style={styles.bonusIconContainer}>
-              <Text style={styles.bonusIcon}>⚡</Text>
-            </View>
-            <View style={styles.bonusInfo}>
-              <Text style={styles.bonusTitle}>Speed Round</Text>
-              <Text style={styles.bonusDescription}>Complete 10 signs in 60 seconds</Text>
-            </View>
-            <View style={styles.bonusXP}>
-              <Text style={styles.bonusXPText}>+50 XP</Text>
-            </View>
-          </View>
-          
-          <View style={styles.bonusCard}>
-            <View style={styles.bonusIconContainer}>
-              <Text style={styles.bonusIcon}>🎯</Text>
-            </View>
-            <View style={styles.bonusInfo}>
-              <Text style={styles.bonusTitle}>Perfect Streak</Text>
-              <Text style={styles.bonusDescription}>Get 5 correct answers in a row</Text>
-            </View>
-            <View style={styles.bonusXP}>
-              <Text style={styles.bonusXPText}>+30 XP</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={{ height: 100 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
+      
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        type={alertConfig.type}
+        onClose={hideAlert}
+      />
     </View>
   );
 }
@@ -315,276 +320,222 @@ export default function DailyQuestScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.background,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 50,
+    paddingTop: 60,
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: AppColors.cardBackground,
-  },
-  streakContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  streakIcon: {
-    width: 24,
-    height: 24,
-  },
-  streakText: {
-    fontSize: 16,
-    ...Fonts.regular,
-    color: AppColors.streak,
-    marginLeft: 4,
+    paddingBottom: 20,
   },
   headerTitle: {
-    fontSize: 20,
-    ...Fonts.appName,
-    color: AppColors.textPrimary,
+    fontSize: 28,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.5,
   },
   xpBadge: {
-    backgroundColor: AppColors.primaryLight,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.cardBg}E6`,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    gap: 6,
   },
   xpText: {
-    fontSize: 14,
-    ...Fonts.appName,
-    color: AppColors.primary,
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.gold,
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
   },
-  progressCard: {
-    backgroundColor: AppColors.cardBackground,
+  // Treasure Card
+  treasureCard: {
     borderRadius: 24,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    padding: 24,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    shadowColor: COLORS.emerald,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  progressHeader: {
+  treasureHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  progressLabel: {
+  treasureLabel: {
     fontSize: 12,
-    ...Fonts.regular,
-    color: AppColors.primary,
-    letterSpacing: 1,
-    marginBottom: 4,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.emerald,
+    letterSpacing: 1.5,
+    marginBottom: 6,
   },
-  progressTitle: {
-    fontSize: 24,
-    ...Fonts.appName,
-    color: AppColors.textPrimary,
-    marginBottom: 4,
+  treasureLabelComplete: {
+    color: '#FFF',
   },
-  progressCount: {
-    fontSize: 14,
-    ...Fonts.regular,
-    color: AppColors.textSecondary,
+  treasureTitle: {
+    fontSize: 22,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
+  },
+  treasureTitleComplete: {
+    color: '#FFF',
   },
   chestContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: 'rgba(148, 163, 184, 0.2)',
     alignItems: 'center',
-  },
-  chest: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: AppColors.primaryLight,
     justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(148, 163, 184, 0.3)',
   },
   chestUnlocked: {
-    backgroundColor: AppColors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    shadowColor: '#FFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
   },
   chestIcon: {
-    fontSize: 32,
-  },
-  chestStatus: {
-    fontSize: 10,
-    ...Fonts.regular,
-    color: AppColors.textSecondary,
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  chestStatusUnlocked: {
-    color: AppColors.primary,
+    fontSize: 48,
   },
   progressBarContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  progressBar: {
-    height: 10,
-    backgroundColor: AppColors.primaryLight,
-    borderRadius: 5,
+  progressBarBg: {
+    height: 14,
+    backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    borderRadius: 7,
     overflow: 'hidden',
+    marginBottom: 8,
   },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    backgroundColor: AppColors.primary,
-    borderRadius: 5,
+    borderRadius: 7,
   },
-  progressHint: {
-    fontSize: 13,
-    ...Fonts.regular,
-    color: AppColors.textSecondary,
+  progressText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.emerald,
   },
-  tasksSection: {
+  progressTextComplete: {
+    color: '#FFF',
+  },
+  treasureHint: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  treasureHintComplete: {
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  // Quests Section
+  questsSection: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    ...Fonts.appName,
-    color: AppColors.textPrimary,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
     marginBottom: 16,
   },
   questCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.cardBackground,
+    backgroundColor: `${COLORS.cardBg}E6`,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
   questCardCompleted: {
     opacity: 0.6,
   },
-  questIcon: {
-    width: 56,
-    height: 56,
+  questIconContainer: {
+    width: 64,
+    height: 64,
     borderRadius: 16,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 14,
-  },
-  questIconText: {
-    fontSize: 28,
   },
   questInfo: {
     flex: 1,
   },
   questTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 4,
   },
   questTitle: {
-    fontSize: 16,
-    ...Fonts.regular,
-    color: AppColors.textPrimary,
-    marginRight: 8,
+    fontSize: 17,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
   },
   questTitleCompleted: {
     textDecorationLine: 'line-through',
-    color: AppColors.textMuted,
-  },
-  xpRewardBadge: {
-    backgroundColor: AppColors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  xpRewardText: {
-    fontSize: 12,
-    ...Fonts.appName,
-    color: AppColors.primary,
+    color: COLORS.textSecondary,
   },
   questDescription: {
-    fontSize: 13,
-    ...Fonts.regular,
-    color: AppColors.textSecondary,
-  },
-  startButton: {
-    backgroundColor: AppColors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  startButtonText: {
     fontSize: 14,
-    ...Fonts.appName,
-    color: AppColors.textWhite,
+    fontFamily: 'Nunito-Regular',
+    color: COLORS.textSecondary,
+    marginBottom: 6,
   },
-  completedBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: AppColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkmark: {
-    fontSize: 18,
-    color: AppColors.textWhite,
-    ...Fonts.regular,
-  },
-  bonusSection: {
-    marginBottom: 24,
-  },
-  bonusCard: {
+  xpBadgeSmall: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.cardBackground,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: AppColors.primaryLight,
-    borderStyle: 'dashed',
-  },
-  bonusIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  bonusIcon: {
-    fontSize: 24,
-  },
-  bonusInfo: {
-    flex: 1,
-  },
-  bonusTitle: {
-    fontSize: 15,
-    ...Fonts.regular,
-    color: AppColors.textPrimary,
-    marginBottom: 2,
-  },
-  bonusDescription: {
-    fontSize: 12,
-    ...Fonts.regular,
-    color: AppColors.textSecondary,
-  },
-  bonusXP: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
+    gap: 4,
   },
-  bonusXPText: {
+  xpBadgeText: {
     fontSize: 12,
-    ...Fonts.appName,
-    color: AppColors.warning,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.gold,
+  },
+  startButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: COLORS.emerald,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  startButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  startButtonText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+  },
+  claimedBadge: {
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -1,6 +1,6 @@
 // frontend/app/login.tsx
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,6 +8,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
+import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 
 const { width, height } = Dimensions.get('window');
 
@@ -16,10 +17,58 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Inline validation error states
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  
+  // Custom alert hook
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+
+  const validateEmail = (emailValue: string): boolean => {
+    const emailPattern = /^[a-zA-Z0-9._-]+@gmail\.com$/;
+    return emailPattern.test(emailValue);
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (value.length > 0 && !validateEmail(value)) {
+      setEmailError('Invalid e-mail format');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (value.length > 0 && value.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+    } else {
+      setPasswordError('');
+    }
+  };
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
+    // Reset errors
+    setEmailError('');
+    setPasswordError('');
+    
+    let hasError = false;
+
+    if (!email) {
+      setEmailError('Email is required');
+      hasError = true;
+    } else if (!validateEmail(email)) {
+      setEmailError('Invalid e-mail format');
+      hasError = true;
+    }
+
+    if (!password) {
+      setPasswordError('Password is required');
+      hasError = true;
+    }
+
+    if (hasError) {
       return;
     }
 
@@ -35,12 +84,27 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('userToken', response.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
         
-        // Navigate to the main app
-        router.replace('/(tabs)/profile' as any);
+        // Check if THIS specific user has completed onboarding (user-specific key)
+        const userEmail = response.data.user.email;
+        const onboardingKey = `hasCompletedOnboarding_${userEmail}`;
+        const hasCompletedOnboarding = await AsyncStorage.getItem(onboardingKey);
+        
+        console.log('User email:', userEmail);
+        console.log('Onboarding key:', onboardingKey);
+        console.log('Has completed onboarding:', hasCompletedOnboarding);
+        
+        // Navigate to onboarding if first time, otherwise go to home
+        if (!hasCompletedOnboarding) {
+          console.log('Navigating to onboarding...');
+          router.push('/onboarding-step1' as any);
+        } else {
+          console.log('Navigating to home...');
+          router.replace('/(tabs)/home' as any);
+        }
       }
     } catch (error) {
       console.error(error);
-      Alert.alert('Login Failed', 'Invalid email or password');
+      showAlert('Login Failed', 'Invalid email or password', [{ text: 'OK' }], 'error');
     } finally {
       setLoading(false);
     }
@@ -67,23 +131,29 @@ export default function LoginScreen() {
           <Text style={styles.subTitle}>Ready to learn some new signs today?</Text>
 
           <View style={styles.inputContainer}>
-            <TextInput 
-              style={styles.input} 
-              placeholder="Email Address" 
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-            <TextInput 
-              style={styles.input} 
-              placeholder="Password" 
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, emailError ? styles.inputError : null]} 
+                placeholder="Email Address" 
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={handleEmailChange}
+              />
+              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+            </View>
+            <View style={styles.inputWrapper}>
+              <TextInput 
+                style={[styles.input, passwordError ? styles.inputError : null]} 
+                placeholder="Password" 
+                placeholderTextColor="rgba(255,255,255,0.6)"
+                secureTextEntry
+                value={password}
+                onChangeText={handlePasswordChange}
+              />
+              {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+            </View>
           </View>
 
           <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
@@ -94,13 +164,27 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
+          <TouchableOpacity onPress={() => router.push('/forgot-password' as any)} style={styles.forgotContainer}>
+            <Text style={styles.forgotText}>Forgot Password?</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={() => router.push('/register' as any)} style={styles.linkContainer}>
             <Text style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>
+              Don&apos;t have an account? <Text style={styles.linkBold}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
         </View>
       </View>
+      
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        type={alertConfig.type}
+        onClose={hideAlert}
+      />
     </View>
   );
 }
@@ -154,6 +238,9 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 28,
   },
+  inputWrapper: {
+    width: '100%',
+  },
   input: {
     height: 54,
     borderWidth: 1.5,
@@ -164,6 +251,17 @@ const styles = StyleSheet.create({
     ...Fonts.regular,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     color: '#fff',
+  },
+  inputError: {
+    borderColor: '#E74C3C',
+    borderWidth: 2,
+  },
+  errorText: {
+    color: '#E74C3C',
+    fontSize: 12,
+    ...Fonts.regular,
+    marginTop: 6,
+    marginLeft: 4,
   },
   button: {
     backgroundColor: AppColors.primary,
@@ -182,8 +280,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     ...Fonts.appName,
   },
+  forgotContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  forgotText: {
+    color: AppColors.primary,
+    fontSize: 14,
+    ...Fonts.bold,
+  },
   linkContainer: {
-    marginTop: 24,
+    marginTop: 16,
     alignItems: 'center',
   },
   linkText: {

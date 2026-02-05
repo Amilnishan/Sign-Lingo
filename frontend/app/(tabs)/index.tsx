@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, Image, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
 
@@ -9,12 +10,28 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      console.log("Navigating to Login...");
-      router.replace('/login');
-    }, 3000);
+    const checkAuthAndNavigate = async () => {
+      try {
+        // Check if user is already logged in
+        const token = await AsyncStorage.getItem('userToken');
+        const user = await AsyncStorage.getItem('userData');
+        
+        setTimeout(() => {
+          if (token && user) {
+            // User is logged in, go to home
+            router.replace('/home');
+          } else {
+            // Not logged in, go to login
+            router.replace('/login');
+          }
+        }, 2500);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.replace('/login');
+      }
+    };
 
-    return () => clearTimeout(timer);
+    checkAuthAndNavigate();
   }, []);
 
   return (

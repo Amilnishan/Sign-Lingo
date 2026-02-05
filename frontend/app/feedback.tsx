@@ -7,25 +7,86 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Fonts } from '@/constants/fonts';
 import { API_URL } from '@/constants/config';
+import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
+
+// Modern Glow Design System
+const COLORS = {
+  background: '#0F172A',
+  cardBg: '#1E293B',
+  cardBorder: '#334155',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#94A3B8',
+  emerald: '#2ECC71',
+  teal: '#14B8A6',
+  gold: '#FFD700',
+  goldLight: 'rgba(255, 215, 0, 0.2)',
+  goldGlow: 'rgba(255, 215, 0, 0.6)',
+};
 
 type Category = 'general' | 'bug' | 'feature';
+
+interface StarRatingProps {
+  rating: number;
+  onRate: (rating: number) => void;
+}
+
+const StarRating = ({ rating, onRate }: StarRatingProps) => {
+  const labels = ['😞 Oh no', '😐 It\'s okay', '😊 Good', '🤩 Great!', '🚀 Loved it!'];
+  
+  return (
+    <View style={styles.starSection}>
+      <View style={styles.starsRow}>
+        {[1, 2, 3, 4, 5].map((star) => {
+          const isActive = star <= rating;
+          return (
+            <TouchableOpacity 
+              key={star} 
+              onPress={() => onRate(star)}
+              style={styles.starTouchable}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.starContainer,
+                isActive && styles.starContainerActive
+              ]}>
+                <Text style={[
+                  styles.starEmoji,
+                  isActive && styles.starEmojiActive
+                ]}>
+                  ⭐
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={styles.ratingLabel}>{labels[rating - 1]}</Text>
+    </View>
+  );
+};
 
 export default function FeedbackScreen() {
   const router = useRouter();
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(3);
   const [category, setCategory] = useState<Category>('general');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
 
   useEffect(() => {
     loadUserData();
@@ -46,7 +107,7 @@ export default function FeedbackScreen() {
 
   const handleSubmit = async () => {
     if (!message.trim()) {
-      Alert.alert('Error', 'Please enter your feedback message');
+      showAlert('Error', 'Please enter your feedback message', [{ text: 'OK' }], 'error');
       return;
     }
 
@@ -61,17 +122,16 @@ export default function FeedbackScreen() {
       });
 
       if (response.status === 201) {
-        Alert.alert(
+        showAlert(
           'Thank You! 🎉',
           'Your feedback has been submitted successfully. We appreciate your input!',
-          [
-            { text: 'OK', onPress: () => router.back() }
-          ]
+          [{ text: 'OK', onPress: () => router.back() }],
+          'success'
         );
       }
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      Alert.alert('Error', 'Failed to submit feedback. Please try again.');
+      showAlert('Error', 'Failed to submit feedback. Please try again.', [{ text: 'OK' }], 'error');
     } finally {
       setLoading(false);
     }
@@ -79,294 +139,413 @@ export default function FeedbackScreen() {
 
   const categories: { key: Category; label: string; icon: string }[] = [
     { key: 'general', label: 'General', icon: '💭' },
-    { key: 'bug', label: 'Bug Report', icon: '🐛' },
-    { key: 'feature', label: 'Feature Request', icon: '✨' },
+    { key: 'bug', label: 'Bug', icon: '🐛' },
+    { key: 'feature', label: 'Feature', icon: '✨' },
   ];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Send Feedback</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Feedback</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Intro */}
-        <View style={styles.introSection}>
-          <Text style={styles.introIcon}>💬</Text>
-          <Text style={styles.introTitle}>We'd love to hear from you!</Text>
-          <Text style={styles.introText}>
-            Your feedback helps us improve Sign-Lingo and make learning ASL better for everyone.
-          </Text>
-        </View>
-
-        {/* Rating */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How would you rate your experience?</Text>
-          <View style={styles.ratingContainer}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity 
-                key={star} 
-                onPress={() => setRating(star)}
-                style={styles.starButton}
-              >
-                <Text style={[
-                  styles.star,
-                  star <= rating && styles.starActive
-                ]}>
-                  ⭐
-                </Text>
-              </TouchableOpacity>
-            ))}
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Chat-like Intro Message */}
+        <View style={styles.chatBubbleLeft}>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarEmoji}>🤖</Text>
           </View>
-          <Text style={styles.ratingLabel}>
-            {rating === 1 && 'Poor'}
-            {rating === 2 && 'Fair'}
-            {rating === 3 && 'Good'}
-            {rating === 4 && 'Very Good'}
-            {rating === 5 && 'Excellent!'}
-          </Text>
-        </View>
-
-        {/* Category */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Category</Text>
-          <View style={styles.categoryContainer}>
-            {categories.map((cat) => (
-              <TouchableOpacity
-                key={cat.key}
-                style={[
-                  styles.categoryButton,
-                  category === cat.key && styles.categoryButtonActive
-                ]}
-                onPress={() => setCategory(cat.key)}
-              >
-                <Text style={styles.categoryIcon}>{cat.icon}</Text>
-                <Text style={[
-                  styles.categoryText,
-                  category === cat.key && styles.categoryTextActive
-                ]}>
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.bubbleContent}>
+            <Text style={styles.bubbleText}>
+              Hey {userName || 'there'}! 👋 We&apos;d love to hear your thoughts on Sign-Lingo. Your feedback helps us improve!
+            </Text>
           </View>
         </View>
 
-        {/* Message */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Feedback</Text>
-          <TextInput
-            style={styles.textArea}
-            placeholder="Tell us what you think... What did you like? What could be better?"
-            placeholderTextColor="#999"
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-            value={message}
-            onChangeText={setMessage}
-          />
-          <Text style={styles.charCount}>{message.length}/500</Text>
+        {/* Rating Section */}
+        <View style={styles.chatBubbleLeft}>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarEmoji}>⭐</Text>
+          </View>
+          <View style={styles.bubbleContentWide}>
+            <Text style={styles.questionText}>How would you rate your experience?</Text>
+            <StarRating rating={rating} onRate={setRating} />
+          </View>
         </View>
 
-        {/* User Info Preview */}
-        <View style={styles.userInfoCard}>
-          <Text style={styles.userInfoLabel}>Submitting as:</Text>
-          <Text style={styles.userInfoName}>{userName || 'Guest User'}</Text>
-          <Text style={styles.userInfoEmail}>{userEmail || 'Not logged in'}</Text>
+        {/* Category Section */}
+        <View style={styles.chatBubbleLeft}>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarEmoji}>📝</Text>
+          </View>
+          <View style={styles.bubbleContentWide}>
+            <Text style={styles.questionText}>What&apos;s this about?</Text>
+            <View style={styles.chipsContainer}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[
+                    styles.chip,
+                    category === cat.key && styles.chipActive
+                  ]}
+                  onPress={() => setCategory(cat.key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.chipIcon}>{cat.icon}</Text>
+                  <Text style={[
+                    styles.chipText,
+                    category === cat.key && styles.chipTextActive
+                  ]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Message Input Section */}
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>💬 Your message</Text>
+          <View style={styles.textAreaContainer}>
+            <TextInput
+              style={styles.textArea}
+              placeholder="Tell us what you think..."
+              placeholderTextColor={COLORS.textSecondary}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              value={message}
+              onChangeText={setMessage}
+              maxLength={500}
+            />
+            <Text style={styles.charCount}>{message.length}/500</Text>
+          </View>
+        </View>
+
+        {/* User Info Card */}
+        <View style={styles.userCard}>
+          <View style={styles.userIconContainer}>
+            <Ionicons name="person" size={20} color={COLORS.emerald} />
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{userName || 'Guest User'}</Text>
+            <Text style={styles.userEmail}>{userEmail || 'Not logged in'}</Text>
+          </View>
         </View>
 
         {/* Submit Button */}
         <TouchableOpacity 
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]} 
           onPress={handleSubmit}
           disabled={loading}
+          activeOpacity={0.9}
+          style={styles.submitTouchable}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Submit Feedback</Text>
-          )}
+          <LinearGradient
+            colors={loading ? ['#64748B', '#475569'] : [COLORS.emerald, COLORS.teal]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.submitButton}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="send" size={20} color="#FFF" />
+                <Text style={styles.submitText}>Send Feedback</Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </View>
+      
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        type={alertConfig.type}
+        onClose={hideAlert}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f7fa',
+    backgroundColor: COLORS.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: `${COLORS.cardBg}E6`,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: '#2ECC71',
   },
   headerTitle: {
-    fontSize: 20,
-    ...Fonts.appName,
-    color: '#fff',
+    fontSize: 22,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.5,
   },
-  content: {
+  headerRight: {
+    width: 44,
+  },
+  scrollView: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
   },
-  introSection: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  // Chat bubbles
+  chatBubbleLeft: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  avatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${COLORS.cardBg}E6`,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  introIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  avatarEmoji: {
+    fontSize: 18,
   },
-  introTitle: {
-    fontSize: 20,
-    ...Fonts.appName,
-    color: '#1a1a2e',
-    marginBottom: 8,
-    textAlign: 'center',
+  bubbleContent: {
+    flex: 1,
+    backgroundColor: `${COLORS.cardBg}E6`,
+    borderRadius: 20,
+    borderTopLeftRadius: 4,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
-  introText: {
-    fontSize: 14,
-    ...Fonts.regular,
-    color: '#7f8c8d',
-    textAlign: 'center',
-    lineHeight: 20,
+  bubbleContentWide: {
+    flex: 1,
+    backgroundColor: `${COLORS.cardBg}E6`,
+    borderRadius: 20,
+    borderTopLeftRadius: 4,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
-  section: {
-    marginBottom: 24,
+  bubbleText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Regular',
+    color: COLORS.textPrimary,
+    lineHeight: 22,
   },
-  sectionTitle: {
-    fontSize: 16,
-    ...Fonts.regular,
-    color: '#1a1a2e',
-    marginBottom: 12,
+  questionText: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
   },
-  ratingContainer: {
+  // Star rating
+  starSection: {
+    alignItems: 'center',
+  },
+  starsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
-    paddingHorizontal: 10,
+    marginBottom: 12,
   },
-  starButton: {
-    padding: 4,
+  starTouchable: {
+    padding: 2,
   },
-  star: {
-    fontSize: 32,
+  starContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  starContainerActive: {
+    backgroundColor: COLORS.goldLight,
+    borderColor: COLORS.gold,
+    borderWidth: 3,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  starEmoji: {
+    fontSize: 16,
     opacity: 0.3,
   },
-  starActive: {
+  starEmojiActive: {
     opacity: 1,
+    textShadowColor: COLORS.goldGlow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   ratingLabel: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#2ECC71',
-    ...Fonts.regular,
+    fontSize: 13,
+    fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
+    color: COLORS.gold,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
-  categoryContainer: {
+  // Category chips
+  chipsContainer: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  categoryButton: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+  chip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 50,
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    borderWidth: 1.5,
+    borderColor: COLORS.cardBorder,
+    gap: 6,
   },
-  categoryButtonActive: {
-    borderColor: '#2ECC71',
-    backgroundColor: '#e8f8f0',
+  chipActive: {
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    borderColor: COLORS.emerald,
   },
-  categoryIcon: {
-    fontSize: 24,
-    marginBottom: 8,
+  chipIcon: {
+    fontSize: 16,
   },
-  categoryText: {
-    fontSize: 12,
-    ...Fonts.regular,
-    color: '#7f8c8d',
+  chipText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textSecondary,
   },
-  categoryTextActive: {
-    color: '#2ECC71',
+  chipTextActive: {
+    color: COLORS.emerald,
+  },
+  // Input section
+  inputSection: {
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 15,
+    fontFamily: 'Nunito-Bold',
+    fontWeight: '700',
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  textAreaContainer: {
+    backgroundColor: `${COLORS.cardBg}E6`,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    overflow: 'hidden',
   },
   textArea: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
     padding: 16,
-    fontSize: 16,
-    ...Fonts.regular,
-    minHeight: 150,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    color: '#1a1a2e',
+    paddingTop: 16,
+    fontSize: 15,
+    fontFamily: 'Nunito-Regular',
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    minHeight: 120,
+    lineHeight: 22,
   },
   charCount: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: COLORS.textSecondary,
     textAlign: 'right',
-    fontSize: 12,
-    ...Fonts.regular,
-    color: '#7f8c8d',
-    marginTop: 8,
+    paddingRight: 16,
+    paddingBottom: 12,
   },
-  userInfoCard: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  userInfoLabel: {
-    fontSize: 12,
-    ...Fonts.regular,
-    color: '#7f8c8d',
-    marginBottom: 4,
-  },
-  userInfoName: {
-    fontSize: 16,
-    ...Fonts.regular,
-    color: '#1a1a2e',
-  },
-  userInfoEmail: {
-    fontSize: 14,
-    ...Fonts.regular,
-    color: '#7f8c8d',
-  },
-  submitButton: {
-    backgroundColor: '#2ECC71',
-    borderRadius: 28,
-    padding: 18,
+  // User card
+  userCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#2ECC71',
+    backgroundColor: `${COLORS.cardBg}E6`,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    gap: 12,
+  },
+  userIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.textPrimary,
+  },
+  userEmail: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  // Submit button
+  submitTouchable: {
+    borderRadius: 50,
+    overflow: 'hidden',
+    shadowColor: COLORS.emerald,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  submitButtonDisabled: {
-    opacity: 0.7,
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10,
   },
-  submitButtonText: {
-    fontSize: 18,
-    ...Fonts.regular,
-    color: '#fff',
+  submitText: {
+    fontSize: 17,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+    letterSpacing: 0.5,
   },
 });

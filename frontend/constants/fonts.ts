@@ -1,31 +1,32 @@
 /**
  * Font configuration for Sign-Lingo app
  * 
- * App Name: Nunito SemiBold 700 (Bold)
- * Other Texts: Nunito SemiBold 600 (Medium)
+ * Nunito Bold (700): For headings and emphasized text
+ * Nunito Regular (400): For body text and normal content
  */
 
 export const Fonts = {
-  // For app name and main headings
+  // For headings and emphasized text
+  bold: {
+    fontFamily: 'Nunito-Bold',
+  },
+  
+  // For regular body text
+  regular: {
+    fontFamily: 'Nunito-Regular',
+  },
+  
+  // Legacy aliases for compatibility
   appName: {
     fontFamily: 'Nunito-Bold',
-    fontWeight: '700' as const,
   },
   
-  // For other texts (regular content)
-  regular: {
-    fontFamily: 'Nunito-SemiBold',
-    fontWeight: '600' as const,
-  },
-  
-  // For smaller text or descriptions
   light: {
-    fontFamily: 'Nunito-SemiBold',
-    fontWeight: '600' as const,
+    fontFamily: 'Nunito-Regular',
   },
 };
 
 // Helper function to get font style
-export const getFontStyle = (type: 'appName' | 'regular' | 'light' = 'regular') => {
+export const getFontStyle = (type: 'bold' | 'regular' | 'appName' | 'light' = 'regular') => {
   return Fonts[type];
 };
