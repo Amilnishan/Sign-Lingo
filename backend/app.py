@@ -10,6 +10,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
+import base64
+import numpy as np
 
 # Load environment variables from .env file
 load_dotenv()
@@ -134,17 +136,25 @@ def login():
     user = users.find_one({'email': data['email']})
     
     if user and bcrypt.check_password_hash(user['password'], data['password']):
+        # Stamp last_active so admin can see online status
+        users.update_one(
+            {'_id': user['_id']},
+            {'$set': {'last_active': datetime.datetime.utcnow()}}
+        )
+        print(f"[LOGIN] {user['full_name']} logged in  (xp={user['xp']}, streak={user.get('streak',0)})")
+
         # Generate JWT Token
         token = jwt.encode({
             'user_id': str(user['_id']),
             'role': user['role'],
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
         }, app.config['SECRET_KEY'], algorithm="HS256")
         
         return jsonify({
             "message": "Login successful!",
             "token": token,
             "user": {
+                "_id": str(user['_id']),
                 "full_name": user['full_name'],
                 "email": user['email'],
                 "xp": user['xp'],
@@ -152,6 +162,7 @@ def login():
             }
         }), 200
     
+    print(f"[LOGIN] FAILED for email={data.get('email')}")
     return jsonify({"message": "Invalid credentials"}), 401
 
 # 3. FORGOT PASSWORD - Request OTP
@@ -289,6 +300,124 @@ def get_user_profile():
 
 # --- ADMIN ROUTES ---
 
+# ── MOBILE SYNC ──────────────────────────────────────────────────
+# Called by the React Native app to push local progress to MongoDB.
+
+@app.route('/api/sync-progress', methods=['POST'])
+def sync_progress():
+    """Accept { streak, weak_signs_count } and update the user document.
+    NOTE: XP is intentionally NOT accepted here – it is only modified via
+    $inc in /api/lesson/complete and /api/add-xp so no stale client value
+    can ever overwrite the server-authoritative total."""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        print('[SYNC-PROGRESS] No auth header')
+        return jsonify({"message": "Unauthorized"}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        user_id = payload.get('user_id')
+
+        from bson.objectid import ObjectId
+        data = request.get_json() or {}
+
+        update_fields = {'last_active': datetime.datetime.utcnow()}
+        # XP is NOT accepted here – server is the sole authority for XP.
+        if 'streak' in data:
+            update_fields['streak'] = data['streak']
+        if 'weak_signs_count' in data:
+            update_fields['weak_signs_count'] = data['weak_signs_count']
+
+        mongo.db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': update_fields}
+        )
+
+        print(f"[SYNC-PROGRESS] user={user_id}  streak={data.get('streak')}  weak={data.get('weak_signs_count')}")
+        return jsonify({"message": "Progress synced"}), 200
+
+    except jwt.ExpiredSignatureError:
+        print('[SYNC-PROGRESS] Token expired')
+        return jsonify({"message": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        print('[SYNC-PROGRESS] Invalid token')
+        return jsonify({"message": "Invalid token"}), 401
+
+
+@app.route('/api/add-xp', methods=['POST'])
+def add_xp():
+    """Increment XP by a given amount (e.g. quest rewards).
+    Uses $inc so there is no risk of overwriting the server value."""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        print('[ADD-XP] No auth header')
+        return jsonify({"message": "Unauthorized"}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        user_id = payload.get('user_id')
+
+        from bson.objectid import ObjectId
+        data = request.get_json() or {}
+        amount = int(data.get('amount', 0))
+        if amount <= 0:
+            return jsonify({"message": "Invalid amount"}), 400
+
+        mongo.db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {
+                '$inc': {'xp': amount},
+                '$set': {'last_active': datetime.datetime.utcnow()}
+            }
+        )
+
+        user = mongo.db.users.find_one({'_id': ObjectId(user_id)}, {'xp': 1})
+        print(f"[ADD-XP] user={user_id}  +{amount}  new_total={user['xp']}")
+        return jsonify({"message": "XP added", "new_total_xp": user['xp']}), 200
+
+    except jwt.ExpiredSignatureError:
+        print('[ADD-XP] Token expired')
+        return jsonify({"message": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        print('[ADD-XP] Invalid token')
+        return jsonify({"message": "Invalid token"}), 401
+
+
+@app.route('/api/heartbeat', methods=['POST'])
+def heartbeat():
+    """Update last_active timestamp so admin dashboard can show Online/Offline."""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        print('[HEARTBEAT] No auth header')
+        return jsonify({"message": "Unauthorized"}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        user_id = payload.get('user_id')
+
+        from bson.objectid import ObjectId
+        mongo.db.users.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {'last_active': datetime.datetime.utcnow()}}
+        )
+
+        print(f"[HEARTBEAT] user={user_id} ✓")
+        return jsonify({"message": "pong"}), 200
+
+    except jwt.ExpiredSignatureError:
+        print('[HEARTBEAT] Token expired')
+        return jsonify({"message": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        print('[HEARTBEAT] Invalid token')
+        return jsonify({"message": "Invalid token"}), 401
+
+
 # 3. ADMIN LOGIN PAGE (Web)
 @app.route('/admin')
 def admin_login_page():
@@ -422,9 +551,12 @@ def admin_stats():
         except:
             pending_feedback = 0
         
-        # Active today (users who logged in today - simplified)
-        today = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        active_today = 0  # Will implement with last_active field later
+        # Active today (users whose last_active is within the last 5 minutes)
+        five_min_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
+        active_today = users.count_documents({
+            'role': 'user',
+            'last_active': {'$gte': five_min_ago}
+        })
         
         return jsonify({
             "total_students": total_students,
@@ -471,11 +603,18 @@ def get_all_users():
         
         user_list = list(users.find(query, {'password': 0}).sort('xp', -1))
         
+        # Determine online / offline based on last_active
+        five_min_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
+
         # Convert ObjectId to string
         for user in user_list:
             user['_id'] = str(user['_id'])
+            last_active = user.get('last_active')
+            user['is_active'] = bool(last_active and last_active >= five_min_ago)
             if 'joined_at' in user:
                 user['joined_at'] = user['joined_at'].isoformat()
+            if 'last_active' in user and hasattr(user['last_active'], 'isoformat'):
+                user['last_active'] = user['last_active'].isoformat()
         
         return jsonify({"users": user_list}), 200
         
@@ -849,11 +988,31 @@ def get_quiz(lesson_id):
     
     questions = []
     
-    # Generate 5 questions total (mix of both types)
-    for i, word in enumerate(lesson_words[:5] if len(lesson_words) >= 5 else lesson_words):
-        # Alternate between question types
-        if i % 2 == 0:
-            # Type 1: Show word, pick correct sign from 4 images/videos
+    # Build a list of 6 words to use for questions (cycle if fewer)
+    question_words = []
+    for i in range(6):
+        question_words.append(lesson_words[i % len(lesson_words)])
+    
+    # Define question type pattern: pick_sign, pick_word, show_sign, pick_sign, pick_word, show_sign
+    # This guarantees 2 camera questions (at index 2 and 5) covering both lesson words
+    type_pattern = ['pick_sign', 'pick_word', 'show_sign', 'pick_sign', 'pick_word', 'show_sign']
+    
+    for i, word in enumerate(question_words):
+        q_type = type_pattern[i]
+        
+        if q_type == 'show_sign':
+            # Camera-based - show the sign using hand gestures
+            questions.append({
+                'id': i + 1,
+                'type': 'show_sign',
+                'question': f"Show the sign for {word.replace('_', ' ')}",
+                'correct_answer': word,
+                'target_sign': word,
+                'options': [],
+                'media_type': media_type
+            })
+        elif q_type == 'pick_sign':
+            # Show word, pick correct sign from 4 images/videos
             wrong_options = [w for w in pool if w != word]
             random.shuffle(wrong_options)
             options = [word] + wrong_options[:3]
@@ -872,7 +1031,7 @@ def get_quiz(lesson_id):
                 'media_type': media_type
             })
         else:
-            # Type 2: Show sign, pick correct word from 4 options
+            # Show sign, pick correct word from 4 options
             wrong_options = [w for w in pool if w != word]
             random.shuffle(wrong_options)
             options = [word] + wrong_options[:3]
@@ -889,14 +1048,10 @@ def get_quiz(lesson_id):
                 'media_type': media_type
             })
     
-    # Ensure we have at least 5 questions by repeating if necessary
-    while len(questions) < 5:
-        questions.append(questions[len(questions) % len(lesson_words)])
-    
     return jsonify({
         'lesson_id': lesson_id,
         'total_questions': len(questions),
-        'questions': questions[:5]
+        'questions': questions[:6]
     }), 200
 
 # 15. COMPLETE LESSON & UPDATE XP
@@ -923,33 +1078,34 @@ def complete_lesson():
         from bson.objectid import ObjectId
         users = mongo.db.users
         
-        # Calculate bonus XP based on quiz score
-        bonus_xp = int(xp_earned * (quiz_score / 100) * 0.5)  # Up to 50% bonus
-        total_xp = xp_earned + bonus_xp
+        # Award only the base XP for the lesson
+        total_xp = xp_earned
         
-        # Update user XP and track completed lessons
+        # Update user XP, track completed lessons, and stamp last_active
         users.update_one(
             {'_id': ObjectId(user_id)},
             {
                 '$inc': {'xp': total_xp},
-                '$addToSet': {'completed_lessons': lesson_id}
+                '$addToSet': {'completed_lessons': lesson_id},
+                '$set': {'last_active': datetime.datetime.utcnow()}
             }
         )
         
         # Get updated user data
         user = users.find_one({'_id': ObjectId(user_id)}, {'password': 0})
         
+        print(f"[LESSON-COMPLETE] user={user_id}  lesson={lesson_id}  +{total_xp}xp  new_total={user['xp']}")
         return jsonify({
             "message": "Lesson completed!",
             "xp_earned": total_xp,
-            "base_xp": xp_earned,
-            "bonus_xp": bonus_xp,
             "new_total_xp": user['xp']
         }), 200
         
     except jwt.ExpiredSignatureError:
+        print('[LESSON-COMPLETE] Token expired')
         return jsonify({"message": "Token expired"}), 401
     except jwt.InvalidTokenError:
+        print('[LESSON-COMPLETE] Invalid token')
         return jsonify({"message": "Invalid token"}), 401
 
 # 16. GET USER PROGRESS
@@ -986,6 +1142,136 @@ def get_user_progress():
         return jsonify({"message": "Token expired"}), 401
     except jwt.InvalidTokenError:
         return jsonify({"message": "Invalid token"}), 401
+
+# --- ML MODEL SETUP ---
+# Sign language actions (must match training data)
+ACTIONS = np.array(['HELLO', 'WELCOME', 'YES', 'NO', 'PLEASE', 'THANK_YOU', 'SORRY', 'FINE', 'OK', 'GOOD_BYE'])
+
+# Load trained SINGLE-FRAME model (instant prediction, no 30-frame buffer needed)
+try:
+    from tensorflow.keras.models import load_model
+    MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'ml_training', 'sign_lingo_model_single.h5')
+    if os.path.exists(MODEL_PATH):
+        gesture_model = load_model(MODEL_PATH)
+        print(f"[ML] Single-frame gesture model loaded from {MODEL_PATH}")
+    else:
+        gesture_model = None
+        print(f"[ML] WARNING: Model not found at {MODEL_PATH}")
+except Exception as e:
+    gesture_model = None
+    print(f"[ML] WARNING: Could not load model: {e}")
+
+# MediaPipe hand detector
+try:
+    import urllib.request
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision as mp_vision
+    from mediapipe import Image as MpImage, ImageFormat as MpImageFormat
+
+    HAND_MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'ml_training', 'hand_landmarker.task')
+    if not os.path.exists(HAND_MODEL_PATH):
+        print("[ML] Downloading MediaPipe hand landmark model...")
+        url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+        urllib.request.urlretrieve(url, HAND_MODEL_PATH)
+        print("[ML] Hand model downloaded!")
+
+    base_options = mp_python.BaseOptions(model_asset_path=HAND_MODEL_PATH)
+    hand_options = mp_vision.HandLandmarkerOptions(
+        base_options=base_options,
+        num_hands=2,
+        min_hand_detection_confidence=0.5,
+        min_hand_presence_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
+    hand_detector = mp_vision.HandLandmarker.create_from_options(hand_options)
+    print("[ML] MediaPipe hand detector ready!")
+except Exception as e:
+    hand_detector = None
+    print(f"[ML] WARNING: Could not load MediaPipe: {e}")
+
+def extract_hand_keypoints(results):
+    """Extract keypoints from MediaPipe hand detection results"""
+    lh = np.zeros(21 * 3)
+    rh = np.zeros(21 * 3)
+
+    if results.hand_landmarks and results.handedness:
+        for idx, hand_landmarks in enumerate(results.hand_landmarks):
+            hand_label = results.handedness[idx][0].category_name
+            coords = np.array([[lm.x, lm.y, lm.z] for lm in hand_landmarks]).flatten()
+            if hand_label == "Left":
+                lh = coords
+            else:
+                rh = coords
+
+    return np.concatenate([lh, rh])
+
+
+# 17. GESTURE PREDICTION ENDPOINT (Single-Frame - Instant Feedback)
+@app.route('/predict', methods=['POST'])
+def predict_gesture():
+    """
+    Receive a base64-encoded image frame, detect hand landmarks,
+    and instantly predict the sign from a single frame.
+    No frame buffer needed - gives immediate feedback!
+    """
+    if not gesture_model or not hand_detector:
+        return jsonify({"error": "Model not loaded", "sign": None, "confidence": 0}), 503
+
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({"error": "No image provided", "sign": None, "confidence": 0}), 400
+
+        # Decode base64 image
+        image_data = base64.b64decode(data['image'])
+        nparr = np.frombuffer(image_data, np.uint8)
+
+        import cv2
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"error": "Invalid image", "sign": None, "confidence": 0}), 400
+
+        # Detect hands with MediaPipe
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = MpImage(image_format=MpImageFormat.SRGB, data=frame_rgb)
+        results = hand_detector.detect(mp_image)
+
+        # Extract keypoints
+        keypoints = extract_hand_keypoints(results)
+
+        # Check if a hand was actually detected
+        if np.sum(np.abs(keypoints)) < 0.01:
+            return jsonify({
+                "sign": None,
+                "confidence": 0,
+                "hand_detected": False
+            }), 200
+
+        # Single-frame prediction - instant!
+        input_data = np.expand_dims(keypoints, axis=0)  # Shape: (1, 126)
+        prediction = gesture_model.predict(input_data, verbose=0)
+        predicted_index = np.argmax(prediction[0])
+        confidence = float(prediction[0][predicted_index])
+        predicted_sign = ACTIONS[predicted_index]
+
+        return jsonify({
+            "sign": predicted_sign,
+            "confidence": round(confidence, 3),
+            "hand_detected": True,
+            "all_predictions": {ACTIONS[i]: round(float(prediction[0][i]), 3) for i in range(len(ACTIONS))}
+        }), 200
+
+    except Exception as e:
+        print(f"[ML] Prediction error: {str(e)}")
+        return jsonify({"error": str(e), "sign": None, "confidence": 0}), 500
+
+
+# 18. RESET PREDICTION (kept for backward compatibility)
+@app.route('/predict/reset', methods=['POST'])
+def reset_prediction():
+    """No longer needed for single-frame model, but kept for compatibility"""
+    return jsonify({"message": "Single-frame model - no buffer to reset"}), 200
+
 
 if __name__ == '__main__':
     # Run on 0.0.0.0 so your mobile phone can access it on the same WiFi

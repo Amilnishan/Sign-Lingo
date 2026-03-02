@@ -1,5 +1,5 @@
 // frontend/app/forgot-password.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
+import { playBackgroundMusic, stopSound } from '@/utils/audio';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,6 +57,22 @@ export default function ForgotPasswordScreen() {
   
   // Custom alert
   const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+  
+  // Background music ref
+  const backgroundMusic = useRef<Audio.Sound | null>(null);
+
+  // Play background music when component mounts
+  useEffect(() => {
+    const playMusic = async () => {
+      backgroundMusic.current = await playBackgroundMusic();
+    };
+    playMusic();
+
+    // Cleanup: stop music when component unmounts
+    return () => {
+      stopSound(backgroundMusic.current);
+    };
+  }, []);
 
   const validateEmail = (emailValue: string): boolean => {
     const emailPattern = /^[a-zA-Z0-9._-]+@gmail\.com$/;
@@ -185,6 +202,9 @@ export default function ForgotPasswordScreen() {
       });
 
       if (response.status === 200) {
+        // Stop background music
+        await stopSound(backgroundMusic.current);
+        
         showAlert(
           'Success! 🎉',
           'Your password has been reset successfully. Please login with your new password.',

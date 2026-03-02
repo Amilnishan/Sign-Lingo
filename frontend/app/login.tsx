@@ -1,19 +1,22 @@
 // frontend/app/login.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
+import { playBackgroundMusic, stopSound } from '@/utils/audio';
+import { useUser } from '@/contexts/UserContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { refresh, sendHeartbeat, syncProgressToBackend } = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,6 +27,22 @@ export default function LoginScreen() {
   
   // Custom alert hook
   const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+  
+  // Background music ref
+  const backgroundMusic = useRef<Audio.Sound | null>(null);
+
+  // Play background music when component mounts
+  useEffect(() => {
+    const playMusic = async () => {
+      backgroundMusic.current = await playBackgroundMusic();
+    };
+    playMusic();
+
+    // Cleanup: stop music when component unmounts
+    return () => {
+      stopSound(backgroundMusic.current);
+    };
+  }, []);
 
   const validateEmail = (emailValue: string): boolean => {
     const emailPattern = /^[a-zA-Z0-9._-]+@gmail\.com$/;
@@ -80,10 +99,24 @@ export default function LoginScreen() {
       });
 
       if (response.status === 200) {
+        // Stop background music
+        await stopSound(backgroundMusic.current);
+        
         // Save token and user data
         await AsyncStorage.setItem('userToken', response.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
-        
+
+        // Save server-side streak to local storage so UserContext picks it up
+        const serverStreak = response.data.user.streak || 0;
+        if (serverStreak > 0) {
+          await AsyncStorage.setItem('dayStreak', String(serverStreak));
+        }
+
+        // Reload context from fresh AsyncStorage data, then sync with server
+        await refresh();
+        sendHeartbeat();           // non-blocking – marks user Online
+        syncProgressToBackend();   // non-blocking – pushes streak/weak_signs
+
         // Check if THIS specific user has completed onboarding (user-specific key)
         const userEmail = response.data.user.email;
         const onboardingKey = `hasCompletedOnboarding_${userEmail}`;

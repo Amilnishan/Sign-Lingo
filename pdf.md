@@ -519,3 +519,5 @@ ID	Word	Description	Difficulty
 48	BATHROOM	T-hand shakes side to side	Easy
 49	FINISH	5-hand flips out (one hand variation)	Easy
 50	UNDERSTAND	Flick index finger up at forehead	Easy
+
+

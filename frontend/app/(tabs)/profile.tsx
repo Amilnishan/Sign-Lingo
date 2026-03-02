@@ -1,20 +1,20 @@
 // frontend/app/(tabs)/profile.tsx
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import React, { useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   ScrollView,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_URL } from '@/constants/config';
-import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useUser, type WeakSign, LEAGUE_COLORS } from '@/contexts/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -35,76 +35,43 @@ const COLORS = {
   gold: '#FFD700',
 };
 
-interface UserData {
-  full_name: string;
-  email: string;
-  xp: number;
-  streak: number;
-  level: number;
-}
-
 export default function ProfileScreen() {
   const router = useRouter();
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
-  
-  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+  const { userXP, userLevel, userLeague, streak, weakSigns, userName, loading, syncXPFromServer } = useUser();
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
+  // Derive values from context
+  const user = { full_name: userName, xp: userXP, streak, level: userLevel };
+  const weakCount = weakSigns.length;
 
-  const loadUserData = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('userData');
-      const token = await AsyncStorage.getItem('userToken');
-      
-      if (userData) {
-        const parsed = JSON.parse(userData);
-        const level = Math.floor((parsed.xp || 0) / 100) + 1;
-        setUser({ ...parsed, level, streak: parsed.streak || 0 });
-      }
-      
-      if (token) {
+  // ── Sync fresh data from server on focus ──
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      (async () => {
         try {
-          const response = await axios.get(`${API_URL}/user/profile`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.data) {
-            const level = Math.floor((response.data.xp || 0) / 100) + 1;
-            setUser({ ...response.data, level });
-            await AsyncStorage.setItem('userData', JSON.stringify(response.data));
+          const token = await AsyncStorage.getItem('userToken');
+          if (token) {
+            try {
+              const response = await axios.get(`${API_URL}/user/profile`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (response.data && !cancelled) {
+                await syncXPFromServer(response.data.xp || 0);
+                await AsyncStorage.setItem('userData', JSON.stringify(response.data));
+              }
+            } catch {
+              console.log('Using cached user data');
+            }
           }
         } catch (err) {
-          console.log('Using cached user data');
+          console.error('Error syncing profile:', err);
         }
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      })();
 
-  const handleLogout = async () => {
-    showAlert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.removeItem('userToken');
-            await AsyncStorage.removeItem('userData');
-            router.replace('/login');
-          }
-        }
-      ],
-      'warning'
-    );
-  };
+      return () => { cancelled = true; };
+    }, []),
+  );
 
   if (loading) {
     return (
@@ -124,6 +91,17 @@ export default function ProfileScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.heroSection}
         >
+          {/* Settings gear — top-right */}
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => router.push('/settings' as any)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="settings-outline" size={24} color="#FFF" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>Profile</Text>
+
           <View style={styles.avatarWrapper}>
             <View style={styles.avatarGlow}>
               <View style={styles.avatar}>
@@ -140,18 +118,18 @@ export default function ProfileScreen() {
           </View>
         </LinearGradient>
 
-        {/* Stats HUD - Floating Glass Container */}
+        {/* ── Stats HUD (Glassmorphism) ── */}
         <View style={styles.statsHUD}>
           <View style={styles.statItem}>
-            <View style={[styles.statIconContainer, { backgroundColor: 'rgba(46, 204, 113, 0.2)' }]}>
+            <View style={[styles.statIconContainer, { backgroundColor: 'rgba(46, 204, 113, 0.2)' }]}>  
               <Ionicons name="flash" size={24} color={COLORS.emerald} />
             </View>
             <Text style={styles.statValue}>{user?.xp || 0}</Text>
             <Text style={styles.statLabel}>Total XP</Text>
           </View>
-          
+
           <View style={styles.statDivider} />
-          
+
           <View style={styles.statItem}>
             <View style={[styles.statIconContainer, { backgroundColor: 'rgba(249, 115, 22, 0.2)' }]}>
               <Ionicons name="flame" size={24} color={COLORS.orange} />
@@ -159,81 +137,68 @@ export default function ProfileScreen() {
             <Text style={styles.statValue}>{user?.streak || 0}</Text>
             <Text style={styles.statLabel}>Streak</Text>
           </View>
-          
+
           <View style={styles.statDivider} />
-          
+
           <View style={styles.statItem}>
             <View style={[styles.statIconContainer, { backgroundColor: 'rgba(255, 215, 0, 0.2)' }]}>
-              <Ionicons name="medal" size={24} color={COLORS.gold} />
+              <Ionicons name="medal" size={24} color={LEAGUE_COLORS[userLeague]} />
             </View>
-            <Text style={styles.statValue}>Gold</Text>
+            <Text style={styles.statValue}>{userLeague}</Text>
             <Text style={styles.statLabel}>League</Text>
           </View>
         </View>
 
-        {/* Group 1: Account */}
+        {/* ── Needs Focus / Weak Signs Card ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ACCOUNT</Text>
-          <View style={styles.glassCard}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings' as any)}>
-              <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
-                <Ionicons name="person-outline" size={20} color={COLORS.blue} />
+          <Text style={styles.sectionTitle}>FOCUS AREA</Text>
+          <View style={[styles.glassCard, weakCount === 0 && styles.glassCardSuccess]}>
+            {weakCount > 0 ? (
+              <>
+                <View style={styles.weakRow}>
+                  <View style={styles.weakBadge}>
+                    <Text style={styles.weakBadgeText}>-{weakCount}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.menuTitle}>Weak Signs</Text>
+                    <Text style={styles.menuSubtitle}>
+                      Accuracy {Math.round(weakSigns.reduce((a, s) => a + s.accuracy, 0) / weakCount)}%
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+                </View>
+                <TouchableOpacity
+                  style={styles.practiceButton}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/live-practice?mode=weakness' as any)}
+                >
+                  <LinearGradient
+                    colors={[COLORS.emerald, COLORS.teal]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.practiceGradient}
+                  >
+                    <Text style={styles.practiceText}>Practice Now</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.noWeakRow}>
+                <View style={[styles.statIconContainer, { backgroundColor: 'rgba(46, 204, 113, 0.2)' }]}>
+                  <Ionicons name="checkmark-circle" size={28} color={COLORS.emerald} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={[styles.menuTitle, { color: COLORS.emerald }]}>Great Job!</Text>
+                  <Text style={styles.menuSubtitle}>No weak signs detected</Text>
+                </View>
               </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Edit Profile</Text>
-                <Text style={styles.menuSubtitle}>Update your information</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-            
-            <View style={styles.menuDivider} />
-            
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings' as any)}>
-              <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(139, 92, 246, 0.2)' }]}>
-                <Ionicons name="lock-closed-outline" size={20} color={COLORS.purple} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Change Password</Text>
-                <Text style={styles.menuSubtitle}>Update your password</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Group 2: App Settings */}
+        {/* ── Quick Access ── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>APP SETTINGS</Text>
-          <View style={styles.glassCard}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings' as any)}>
-              <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(46, 204, 113, 0.2)' }]}>
-                <Ionicons name="notifications-outline" size={20} color={COLORS.emerald} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Notifications</Text>
-                <Text style={styles.menuSubtitle}>Manage alerts</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-            
-            <View style={styles.menuDivider} />
-            
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings' as any)}>
-              <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(249, 115, 22, 0.2)' }]}>
-                <Ionicons name="volume-high-outline" size={20} color={COLORS.orange} />
-              </View>
-              <View style={styles.menuContent}>
-                <Text style={styles.menuTitle}>Sound & Haptics</Text>
-                <Text style={styles.menuSubtitle}>Audio preferences</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Group 3: Support */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SUPPORT</Text>
+          <Text style={styles.sectionTitle}>QUICK ACCESS</Text>
           <View style={styles.glassCard}>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/achievements' as any)}>
               <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(255, 215, 0, 0.2)' }]}>
@@ -245,9 +210,9 @@ export default function ProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
-            
+
             <View style={styles.menuDivider} />
-            
+
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/learning-stats' as any)}>
               <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
                 <Ionicons name="bar-chart-outline" size={20} color={COLORS.blue} />
@@ -258,9 +223,9 @@ export default function ProfileScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
             </TouchableOpacity>
-            
+
             <View style={styles.menuDivider} />
-            
+
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/feedback' as any)}>
               <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(139, 92, 246, 0.2)' }]}>
                 <Ionicons name="chatbubble-outline" size={20} color={COLORS.purple} />
@@ -274,26 +239,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Logout Button - Sleek Outline */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.red} />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-
         {/* App Version */}
         <Text style={styles.versionText}>Sign-Lingo v1.0.0</Text>
-        
+
         <View style={{ height: 40 }} />
       </ScrollView>
-      
-      <CustomAlert
-        visible={alertConfig.visible}
-        title={alertConfig.title}
-        message={alertConfig.message}
-        buttons={alertConfig.buttons}
-        type={alertConfig.type}
-        onClose={hideAlert}
-      />
     </View>
   );
 }
@@ -318,9 +268,26 @@ const styles = StyleSheet.create({
   },
   // Hero Section
   heroSection: {
-    paddingTop: 60,
+    paddingTop: 56,
     paddingBottom: 80,
     alignItems: 'center',
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+    marginBottom: 16,
   },
   avatarWrapper: {
     marginBottom: 16,
@@ -418,6 +385,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
     paddingHorizontal: 20,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 13,
     fontFamily: 'Nunito-Bold',
@@ -426,6 +399,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginLeft: 4,
   },
+  seeAllText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.emerald,
+    marginBottom: 12,
+  },
   glassCard: {
     backgroundColor: `${COLORS.cardBg}E6`,
     borderRadius: 20,
@@ -433,6 +412,51 @@ const styles = StyleSheet.create({
     borderColor: COLORS.cardBorder,
     overflow: 'hidden',
   },
+  glassCardSuccess: {
+    borderColor: 'rgba(46, 204, 113, 0.35)',
+  },
+  // Weak signs card
+  weakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  weakBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  weakBadgeText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: COLORS.red,
+  },
+  noWeakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  practiceButton: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  practiceGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  practiceText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: '#FFF',
+  },
+  // Menu items
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,25 +488,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.cardBorder,
     marginLeft: 68,
-  },
-  // Logout Button
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 20,
-    marginTop: 32,
-    paddingVertical: 16,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: COLORS.red,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    gap: 8,
-  },
-  logoutText: {
-    fontSize: 16,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.red,
   },
   versionText: {
     textAlign: 'center',

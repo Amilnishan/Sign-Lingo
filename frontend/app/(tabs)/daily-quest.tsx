@@ -1,29 +1,29 @@
 // frontend/app/(tabs)/daily-quest.tsx
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Animated,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuests, Quest } from '@/contexts/QuestContext';
+import { useUser } from '@/contexts/UserContext';
 
 const { width } = Dimensions.get('window');
 
-// Modern Glow Design System
-const COLORS = {
-  background: '#0F172A',
-  cardBg: '#1E293B',
+// ─── Design tokens ───────────────────────────────────────────────
+const C = {
+  bg: '#0F172A',
+  card: '#1E293B',
   cardBorder: '#334155',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#94A3B8',
+  text: '#FFFFFF',
+  sub: '#94A3B8',
   emerald: '#2ECC71',
   teal: '#14B8A6',
   orange: '#F97316',
@@ -32,296 +32,205 @@ const COLORS = {
   gold: '#FFD700',
 };
 
-interface Quest {
-  id: string;
-  title: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  xpReward: number;
-  completed: boolean;
-  type: 'practice' | 'vocabulary' | 'quiz';
-}
+const TYPE_META: Record<string, { color: string; iconFallback: string }> = {
+  sign:   { color: C.blue,   iconFallback: 'hand-left-outline' },
+  xp:     { color: C.orange, iconFallback: 'flash-outline' },
+  lesson: { color: C.purple, iconFallback: 'book-outline' },
+  quiz:   { color: C.teal,   iconFallback: 'help-circle-outline' },
+};
 
-export default function DailyQuestScreen() {
-  const router = useRouter();
-  const [streak, setStreak] = useState(0);
-  const [totalXP, setTotalXP] = useState(0);
-  const [quests, setQuests] = useState<Quest[]>([
-    {
-      id: '1',
-      title: 'Speed Round',
-      description: 'Complete in 60 seconds',
-      icon: 'flash',
-      xpReward: 20,
-      completed: false,
-      type: 'practice'
-    },
-    {
-      id: '2',
-      title: 'Master Vocabulary',
-      description: 'Learn 5 new signs',
-      icon: 'book',
-      xpReward: 30,
-      completed: false,
-      type: 'vocabulary'
-    },
-    {
-      id: '3',
-      title: 'Quiz Champion',
-      description: 'Complete weekly review',
-      icon: 'help-circle',
-      xpReward: 25,
-      completed: false,
-      type: 'quiz'
-    }
-  ]);
+// ─── Animated Quest Card ─────────────────────────────────────────
+function QuestCard({ quest, onClaim }: { quest: Quest; onClaim: () => void }) {
+  const fillAnim = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
+  const meta = TYPE_META[quest.type] ?? TYPE_META.sign;
 
-  const [chestAnimation] = useState(new Animated.Value(1));
-  
-  const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+  const pct = quest.target > 0 ? Math.min(quest.current / quest.target, 1) : 0;
 
   useEffect(() => {
-    loadUserData();
-    loadQuestProgress();
-  }, []);
+    Animated.timing(fillAnim, {
+      toValue: pct,
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
 
-  const loadUserData = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('userData');
-      if (userData) {
-        const parsed = JSON.parse(userData);
-        setStreak(parsed.streak || 0);
-        setTotalXP(parsed.xp || 0);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
+    if (quest.completed) {
+      Animated.spring(checkScale, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }).start();
     }
-  };
+  }, [pct, quest.completed]);
 
-  const loadQuestProgress = async () => {
-    try {
-      const questData = await AsyncStorage.getItem('dailyQuests');
-      const lastDate = await AsyncStorage.getItem('questDate');
-      const today = new Date().toDateString();
-      
-      if (lastDate !== today) {
-        await AsyncStorage.setItem('questDate', today);
-        await AsyncStorage.removeItem('dailyQuests');
-      } else if (questData) {
-        setQuests(JSON.parse(questData));
-      }
-    } catch (error) {
-      console.error('Error loading quest progress:', error);
-    }
+  const barWidth = fillAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
+  const barColor = quest.completed ? C.emerald : meta.color;
+
+  return (
+    <View style={[styles.card, quest.completed && styles.cardDone]}>
+      {/* Icon */}
+      <View style={[styles.iconWrap, { backgroundColor: `${barColor}25` }]}>
+        <Ionicons
+          name={(quest.icon || meta.iconFallback) as any}
+          size={26}
+          color={barColor}
+        />
+      </View>
+
+      {/* Info + bar */}
+      <View style={styles.cardBody}>
+        <View style={styles.topRow}>
+          <Text style={[styles.questLabel, quest.completed && styles.questLabelDone]}>
+            {quest.label}
+          </Text>
+          <Text style={[styles.counterText, { color: barColor }]}>
+            {quest.current}/{quest.target}
+          </Text>
+        </View>
+
+        {/* Progress bar */}
+        <View style={styles.barBg}>
+          <Animated.View style={[styles.barFill, { width: barWidth, backgroundColor: barColor }]} />
+        </View>
+
+        {/* XP badge */}
+        <View style={styles.xpRow}>
+          <Ionicons name="star" size={12} color={C.gold} />
+          <Text style={styles.xpText}>+{quest.xpReward} XP</Text>
+        </View>
+      </View>
+
+      {/* Claim button or completed checkmark */}
+      {quest.completed && !quest.claimed && (
+        <TouchableOpacity onPress={onClaim} style={styles.claimBtn}>
+          <LinearGradient
+            colors={[C.emerald, C.teal]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.claimGrad}
+          >
+            <Ionicons name="gift" size={14} color="#fff" />
+            <Text style={styles.claimText}>Claim</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+      {quest.claimed && (
+        <Animated.View style={[styles.checkWrap, { transform: [{ scale: checkScale }] }]}>
+          <Ionicons name="checkmark-circle" size={30} color={C.emerald} />
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+// ─── Screen ──────────────────────────────────────────────────────
+export default function DailyQuestScreen() {
+  const { quests, loading, claimQuest } = useQuests();
+  const { addXP } = useUser();
+
+  const handleClaim = (quest: Quest) => {
+    claimQuest(quest.id);
+    addXP(quest.xpReward);
   };
 
   const completedCount = quests.filter(q => q.completed).length;
-  const totalCount = quests.length;
-  const progressPercent = (completedCount / totalCount) * 100;
-  const allCompleted = completedCount === totalCount;
+  const claimedCount = quests.filter(q => q.claimed).length;
+  const totalCount = quests.length || 3;
+  const pct = Math.round((completedCount / totalCount) * 100);
+  const allDone = claimedCount === totalCount && totalCount > 0;
 
-  const animateChest = () => {
-    Animated.sequence([
-      Animated.timing(chestAnimation, {
-        toValue: 1.2,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(chestAnimation, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  const chestAnim = useRef(new Animated.Value(1)).current;
 
-  const handleStartQuest = async (questId: string) => {
-    const updatedQuests = quests.map(q => 
-      q.id === questId ? { ...q, completed: true } : q
+  useEffect(() => {
+    if (allDone) {
+      Animated.sequence([
+        Animated.timing(chestAnim, { toValue: 1.15, duration: 250, useNativeDriver: true }),
+        Animated.timing(chestAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [allDone]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={C.emerald} />
+      </View>
     );
-    setQuests(updatedQuests);
-    await AsyncStorage.setItem('dailyQuests', JSON.stringify(updatedQuests));
-    
-    const quest = quests.find(q => q.id === questId);
-    if (quest) {
-      const newXP = totalXP + quest.xpReward;
-      setTotalXP(newXP);
-      
-      const userData = await AsyncStorage.getItem('userData');
-      if (userData) {
-        const parsed = JSON.parse(userData);
-        parsed.xp = newXP;
-        await AsyncStorage.setItem('userData', JSON.stringify(parsed));
-      }
-      
-      showAlert(
-        '🎉 Quest Complete!',
-        `You earned +${quest.xpReward} XP!`,
-        [{ text: 'Awesome!' }],
-        'success'
-      );
-    }
-
-    if (updatedQuests.every(q => q.completed)) {
-      animateChest();
-      setTimeout(() => {
-        showAlert(
-          '🎁 Daily Chest Unlocked!',
-          'Congratulations! You completed all daily missions!',
-          [{ text: 'Claim Reward' }],
-          'success'
-        );
-      }, 500);
-    }
-  };
-
-  const getQuestColor = (type: string) => {
-    switch (type) {
-      case 'practice': return COLORS.orange;
-      case 'vocabulary': return COLORS.blue;
-      case 'quiz': return COLORS.purple;
-      default: return COLORS.emerald;
-    }
-  };
+  }
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Daily Missions</Text>
-        <View style={styles.xpBadge}>
-          <Ionicons name="flash" size={16} color={COLORS.gold} />
-          <Text style={styles.xpText}>{totalXP} XP</Text>
+        <View style={styles.headerBadge}>
+          <Ionicons name="flash" size={16} color={C.gold} />
+          <Text style={styles.headerBadgeText}>{completedCount}/{totalCount}</Text>
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Main Progress Card - Treasure Chest */}
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Treasure Card */}
         <LinearGradient
-          colors={allCompleted ? [COLORS.emerald, COLORS.teal] : [`${COLORS.cardBg}E6`, COLORS.cardBg]}
+          colors={allDone ? [C.emerald, C.teal] : [`${C.card}E6`, C.card]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.treasureCard}
+          style={styles.treasure}
         >
-          <View style={styles.treasureHeader}>
-            <View>
-              <Text style={[styles.treasureLabel, allCompleted && styles.treasureLabelComplete]}>
-                {allCompleted ? 'COMPLETED!' : 'DAILY GOAL'}
+          <View style={styles.treasureTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.treasureTag, allDone && { color: '#FFF' }]}>
+                {allDone ? 'ALL COMPLETE!' : 'DAILY GOAL'}
               </Text>
-              <Text style={[styles.treasureTitle, allCompleted && styles.treasureTitleComplete]}>
-                {allCompleted ? 'Claim Your Reward!' : 'Unlock the Chest'}
+              <Text style={[styles.treasureTitle, allDone && { color: '#FFF' }]}>
+                {allDone ? 'Claim Your Reward!' : 'Unlock the Chest'}
               </Text>
             </View>
-            <Animated.View style={{ transform: [{ scale: chestAnimation }] }}>
-              <View style={[styles.chestContainer, allCompleted && styles.chestUnlocked]}>
-                <Text style={styles.chestIcon}>{allCompleted ? '🎁' : '📦'}</Text>
+            <Animated.View style={{ transform: [{ scale: chestAnim }] }}>
+              <View style={[styles.chestBox, allDone && styles.chestBoxDone]}>
+                <Text style={{ fontSize: 44 }}>{allDone ? '🎁' : '📦'}</Text>
               </View>
             </Animated.View>
           </View>
-          
-          {/* Progress Bar */}
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBg}>
-              <LinearGradient
-                colors={[COLORS.emerald, COLORS.teal]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
-              />
-            </View>
-            <Text style={[styles.progressText, allCompleted && styles.progressTextComplete]}>
-              {completedCount}/{totalCount} completed
-            </Text>
+
+          {/* Master progress bar */}
+          <View style={styles.masterBarBg}>
+            <LinearGradient
+              colors={[C.emerald, C.teal]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.masterBarFill, { width: `${pct}%` }]}
+            />
           </View>
-          
-          <Text style={[styles.treasureHint, allCompleted && styles.treasureHintComplete]}>
-            {allCompleted 
+          <Text style={[styles.treasureSub, allDone && { color: 'rgba(255,255,255,0.9)' }]}>
+            {allDone
               ? '✨ Amazing work! All missions completed!'
-              : `Complete ${totalCount - completedCount} more quest${totalCount - completedCount > 1 ? 's' : ''} to unlock!`}
+              : completedCount === totalCount
+                ? `Claim your rewards to unlock the chest!`
+                : `Complete ${totalCount - completedCount} more quest${totalCount - completedCount > 1 ? 's' : ''} to unlock!`}
           </Text>
         </LinearGradient>
 
-        {/* Quest List - Mission Cards */}
-        <View style={styles.questsSection}>
-          <Text style={styles.sectionTitle}>⚔️ Active Missions</Text>
-          
-          {quests.map((quest) => {
-            const questColor = getQuestColor(quest.type);
-            return (
-              <View 
-                key={quest.id} 
-                style={[
-                  styles.questCard,
-                  quest.completed && styles.questCardCompleted
-                ]}
-              >
-                {/* Left: Icon Container */}
-                <View style={[styles.questIconContainer, { backgroundColor: `${questColor}33` }]}>
-                  <Ionicons name={quest.icon} size={28} color={questColor} />
-                </View>
-                
-                {/* Middle: Quest Info */}
-                <View style={styles.questInfo}>
-                  <View style={styles.questTitleRow}>
-                    <Text style={[
-                      styles.questTitle,
-                      quest.completed && styles.questTitleCompleted
-                    ]}>
-                      {quest.title}
-                    </Text>
-                  </View>
-                  <Text style={styles.questDescription}>{quest.description}</Text>
-                  <View style={styles.xpBadgeSmall}>
-                    <Ionicons name="star" size={12} color={COLORS.gold} />
-                    <Text style={styles.xpBadgeText}>+{quest.xpReward} XP</Text>
-                  </View>
-                </View>
-                
-                {/* Right: Action Button */}
-                {quest.completed ? (
-                  <View style={styles.claimedBadge}>
-                    <Ionicons name="checkmark-circle" size={32} color={COLORS.emerald} />
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={styles.startButton}
-                    onPress={() => handleStartQuest(quest.id)}
-                    activeOpacity={0.8}
-                  >
-                    <LinearGradient
-                      colors={[questColor, questColor]}
-                      style={styles.startButtonGradient}
-                    >
-                      <Text style={styles.startButtonText}>Start</Text>
-                      <Ionicons name="arrow-forward" size={16} color="#FFF" />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
-        </View>
+        {/* Quest list */}
+        <Text style={styles.sectionTitle}>⚔️ Active Missions</Text>
+
+        {quests.map(q => (
+          <QuestCard key={q.id} quest={q} onClaim={() => handleClaim(q)} />
+        ))}
 
         <View style={{ height: 40 }} />
       </ScrollView>
-      
-      <CustomAlert
-        visible={alertConfig.visible}
-        title={alertConfig.title}
-        message={alertConfig.message}
-        buttons={alertConfig.buttons}
-        type={alertConfig.type}
-        onClose={hideAlert}
-      />
     </View>
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  container: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,212 +239,128 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.textPrimary,
-    letterSpacing: 0.5,
-  },
-  xpBadge: {
+  headerTitle: { fontSize: 28, fontFamily: 'Nunito-Bold', color: C.text, letterSpacing: 0.5 },
+  headerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${COLORS.cardBg}E6`,
+    backgroundColor: `${C.card}E6`,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: C.cardBorder,
     gap: 6,
   },
-  xpText: {
-    fontSize: 15,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.gold,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  // Treasure Card
-  treasureCard: {
+  headerBadgeText: { fontSize: 15, fontFamily: 'Nunito-Bold', color: C.gold },
+  scroll: { flex: 1, paddingHorizontal: 20 },
+
+  // Treasure card
+  treasure: {
     borderRadius: 24,
     padding: 24,
-    marginBottom: 32,
+    marginBottom: 28,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    shadowColor: COLORS.emerald,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
+    borderColor: C.cardBorder,
   },
-  treasureHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  treasureLabel: {
-    fontSize: 12,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.emerald,
-    letterSpacing: 1.5,
-    marginBottom: 6,
-  },
-  treasureLabelComplete: {
-    color: '#FFF',
-  },
-  treasureTitle: {
-    fontSize: 22,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.textPrimary,
-  },
-  treasureTitleComplete: {
-    color: '#FFF',
-  },
-  chestContainer: {
-    width: 80,
-    height: 80,
+  treasureTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  treasureTag: { fontSize: 12, fontFamily: 'Nunito-Bold', color: C.emerald, letterSpacing: 1.5, marginBottom: 4 },
+  treasureTitle: { fontSize: 22, fontFamily: 'Nunito-Bold', color: C.text },
+  chestBox: {
+    width: 76,
+    height: 76,
     borderRadius: 20,
-    backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    backgroundColor: 'rgba(148,163,184,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(148, 163, 184, 0.3)',
+    borderColor: 'rgba(148,163,184,0.3)',
   },
-  chestUnlocked: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    shadowColor: '#FFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
+  chestBoxDone: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  chestIcon: {
-    fontSize: 48,
-  },
-  progressBarContainer: {
-    marginBottom: 16,
-  },
-  progressBarBg: {
+  masterBarBg: {
     height: 14,
-    backgroundColor: 'rgba(148, 163, 184, 0.2)',
+    backgroundColor: 'rgba(148,163,184,0.2)',
     borderRadius: 7,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 7,
-  },
-  progressText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.emerald,
-  },
-  progressTextComplete: {
-    color: '#FFF',
-  },
-  treasureHint: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
-  treasureHintComplete: {
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  // Quests Section
-  questsSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.textPrimary,
-    marginBottom: 16,
-  },
-  questCard: {
+  masterBarFill: { height: '100%', borderRadius: 7 },
+  treasureSub: { fontSize: 14, fontFamily: 'Nunito-Regular', color: C.sub, lineHeight: 20 },
+
+  sectionTitle: { fontSize: 18, fontFamily: 'Nunito-Bold', color: C.text, marginBottom: 14 },
+
+  // Quest card
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${COLORS.cardBg}E6`,
+    backgroundColor: `${C.card}E6`,
     borderRadius: 20,
-    padding: 16,
+    padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: C.cardBorder,
   },
-  questCardCompleted: {
-    opacity: 0.6,
+  cardDone: {
+    borderColor: C.emerald,
+    backgroundColor: 'rgba(46,204,113,0.08)',
   },
-  questIconContainer: {
-    width: 64,
-    height: 64,
+  iconWrap: {
+    width: 56,
+    height: 56,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
-  questInfo: {
-    flex: 1,
+  cardBody: { flex: 1 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  questLabel: { fontSize: 16, fontFamily: 'Nunito-Bold', color: C.text, flex: 1, marginRight: 8 },
+  questLabelDone: { color: C.emerald },
+  counterText: { fontSize: 14, fontFamily: 'Nunito-Bold' },
+
+  // Progress bar
+  barBg: {
+    height: 8,
+    backgroundColor: 'rgba(148,163,184,0.2)',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
   },
-  questTitleRow: {
-    marginBottom: 4,
-  },
-  questTitle: {
-    fontSize: 17,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.textPrimary,
-  },
-  questTitleCompleted: {
-    textDecorationLine: 'line-through',
-    color: COLORS.textSecondary,
-  },
-  questDescription: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
-  xpBadgeSmall: {
+  barFill: { height: '100%', borderRadius: 4 },
+
+  xpRow: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    backgroundColor: 'rgba(255,215,0,0.12)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 10,
     gap: 4,
   },
-  xpBadgeText: {
-    fontSize: 12,
-    fontFamily: 'Nunito-Bold',
-    color: COLORS.gold,
-  },
-  startButton: {
-    borderRadius: 12,
+  xpText: { fontSize: 12, fontFamily: 'Nunito-Bold', color: C.gold },
+
+  checkWrap: { marginLeft: 8 },
+
+  // Claim button
+  claimBtn: {
+    marginLeft: 8,
+    borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: COLORS.emerald,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
-  startButtonGradient: {
+  claimGrad: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 5,
   },
-  startButtonText: {
-    fontSize: 15,
+  claimText: {
+    fontSize: 13,
     fontFamily: 'Nunito-Bold',
-    color: '#FFF',
-  },
-  claimedBadge: {
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    color: '#fff',
   },
 });
+

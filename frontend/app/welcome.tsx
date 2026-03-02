@@ -1,16 +1,33 @@
 // frontend/app/welcome.tsx
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, ViewStyle, TextStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
+import { playBackgroundMusic, stopSound } from '@/utils/audio';
 
 const { width, height } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  
+  // Background music ref
+  const backgroundMusic = useRef<Audio.Sound | null>(null);
+
+  // Play background music when component mounts
+  useEffect(() => {
+    const playMusic = async () => {
+      backgroundMusic.current = await playBackgroundMusic();
+    };
+    playMusic();
+
+    // Cleanup: stop music when component unmounts
+    return () => {
+      stopSound(backgroundMusic.current);
+    };
+  }, []);
 
   const handleGetStarted = () => {
     router.push('/onboarding' as any);

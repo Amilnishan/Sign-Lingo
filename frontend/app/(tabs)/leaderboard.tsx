@@ -1,5 +1,5 @@
 // frontend/app/(tabs)/leaderboard.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Dimensions
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_URL } from '@/constants/config';
@@ -50,8 +50,14 @@ export default function LeaderboardScreen() {
 
   useEffect(() => {
     loadCurrentUser();
-    fetchLeaderboard();
-  }, [activeTab]);
+  }, []);
+
+  // Re-fetch leaderboard every time the tab is focused (not just on mount)
+  useFocusEffect(
+    useCallback(() => {
+      fetchLeaderboard();
+    }, [activeTab])
+  );
 
   const loadCurrentUser = async () => {
     try {

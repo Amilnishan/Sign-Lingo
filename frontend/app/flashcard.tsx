@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack, useFocusEffect } from 'expo-router';
 import { Video, ResizeMode } from 'expo-av';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
@@ -56,6 +56,7 @@ export default function FlashcardScreen() {
   const lessonId = Number(params.lessonId) || 1;
   const lessonTitle = params.title as string || 'Flashcards';
   const lessonXp = Number(params.xp) || 10;
+  const lessonWords = (params.words as string) || '[]';
 
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -70,6 +71,27 @@ export default function FlashcardScreen() {
 
   // Video ref
   const videoRef = useRef<Video>(null);
+
+  // ✅ Pause video when screen loses focus (e.g., camera opens)
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Screen is focused
+      setIsScreenFocused(true);
+      if (videoRef.current) {
+        videoRef.current.playAsync();
+      }
+
+      return () => {
+        // Screen lost focus (user navigated away)
+        setIsScreenFocused(false);
+        if (videoRef.current) {
+          videoRef.current.pauseAsync();
+        }
+      };
+    }, [])
+  );
 
   useEffect(() => {
     fetchLessonContent();
@@ -126,6 +148,7 @@ export default function FlashcardScreen() {
           lessonId: lessonId,
           title: lessonTitle,
           xp: lessonXp,
+          words: lessonWords,
         },
       });
     }
@@ -276,8 +299,8 @@ export default function FlashcardScreen() {
                       source={{ uri: `${API_URL}${currentSign.media_url}` }}
                       style={styles.signVideo}
                       resizeMode={ResizeMode.COVER}
-                      shouldPlay
-                      isLooping
+                      shouldPlay={isScreenFocused}
+                      isLooping={isScreenFocused}
                       isMuted={true}
                     />
                   )}

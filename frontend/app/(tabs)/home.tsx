@@ -1,5 +1,5 @@
 // frontend/app/(tabs)/home.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path } from 'react-native-svg';
 import { Fonts } from '@/constants/fonts';
+import { useUser } from '@/contexts/UserContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -43,12 +43,12 @@ const UNITS = [
     icon: 'hand-left',
     color: COLORS.emerald,
     lessons: [
-      { id: 1, title: 'Hello & Welcome', words: ['HELLO', 'WELCOME'], xp: 10, completed: false },
-      { id: 2, title: 'Yes & No', words: ['YES', 'NO'], xp: 10, completed: false },
-      { id: 3, title: 'Please & Thank You', words: ['PLEASE', 'THANK_YOU'], xp: 10, completed: false },
-      { id: 4, title: 'Sorry & Fine', words: ['SORRY', 'FINE'], xp: 10, completed: false },
-      { id: 5, title: 'OK & Good Bye', words: ['OK', 'GOOD_BYE'], xp: 10, completed: false },
-      { id: 6, title: 'Practice Greetings', words: ['HELLO', 'GOODBYE', 'YES', 'NO', 'PLEASE', 'THANK_YOU', 'SORRY', 'FINE', 'OK', 'WELCOME'], xp: 20, completed: false },
+      { id: 1, title: 'Hello & Welcome', words: ['HELLO', 'WELCOME'], xp: 30, completed: false },
+      { id: 2, title: 'Yes & No', words: ['YES', 'NO'], xp: 30, completed: false },
+      { id: 3, title: 'Please & Thank You', words: ['PLEASE', 'THANK_YOU'], xp: 30, completed: false },
+      { id: 4, title: 'Sorry & Fine', words: ['SORRY', 'FINE'], xp: 30, completed: false },
+      { id: 5, title: 'OK & Good Bye', words: ['OK', 'GOOD_BYE'], xp: 30, completed: false },
+      { id: 6, title: 'Practice Greetings', words: ['HELLO', 'GOODBYE', 'YES', 'NO', 'PLEASE', 'THANK_YOU', 'SORRY', 'FINE', 'OK', 'WELCOME'], xp: 100, completed: false },
     ],
   },
   {
@@ -58,11 +58,11 @@ const UNITS = [
     icon: 'text',
     color: COLORS.blue,
     lessons: [
-      { id: 7, title: 'Letters A, B, C', words: ['A', 'B', 'C'], xp: 10, completed: false },
-      { id: 8, title: 'Letters D, E, F', words: ['D', 'E', 'F'], xp: 10, completed: false },
-      { id: 9, title: 'Letters G, H, I', words: ['G', 'H', 'I'], xp: 10, completed: false },
-      { id: 10, title: 'Letters J, K, L, M', words: ['J', 'K', 'L', 'M'], xp: 10, completed: false },
-      { id: 11, title: 'Practice A-M', words: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'], xp: 20, completed: false },
+      { id: 7, title: 'Letters A, B, C', words: ['A', 'B', 'C'], xp: 30, completed: false },
+      { id: 8, title: 'Letters D, E, F', words: ['D', 'E', 'F'], xp: 30, completed: false },
+      { id: 9, title: 'Letters G, H, I', words: ['G', 'H', 'I'], xp: 30, completed: false },
+      { id: 10, title: 'Letters J, K, L, M', words: ['J', 'K', 'L', 'M'], xp: 30, completed: false },
+      { id: 11, title: 'Practice A-M', words: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'], xp: 100, completed: false },
     ],
   },
   {
@@ -72,11 +72,11 @@ const UNITS = [
     icon: 'text',
     color: COLORS.purple,
     lessons: [
-      { id: 12, title: 'Letters N, O, P', words: ['N', 'O', 'P'], xp: 10, completed: false },
-      { id: 13, title: 'Letters Q, R, S', words: ['Q', 'R', 'S'], xp: 10, completed: false },
-      { id: 14, title: 'Letters T, U, V', words: ['T', 'U', 'V'], xp: 10, completed: false },
-      { id: 15, title: 'Letters W, X, Y, Z', words: ['W', 'X', 'Y', 'Z'], xp: 10, completed: false },
-      { id: 16, title: 'Practice N-Z', words: ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'], xp: 20, completed: false },
+      { id: 12, title: 'Letters N, O, P', words: ['N', 'O', 'P'], xp: 30, completed: false },
+      { id: 13, title: 'Letters Q, R, S', words: ['Q', 'R', 'S'], xp: 30, completed: false },
+      { id: 14, title: 'Letters T, U, V', words: ['T', 'U', 'V'], xp: 30, completed: false },
+      { id: 15, title: 'Letters W, X, Y, Z', words: ['W', 'X', 'Y', 'Z'], xp: 30, completed: false },
+      { id: 16, title: 'Practice N-Z', words: ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'], xp: 100, completed: false },
     ],
   },
   {
@@ -86,10 +86,10 @@ const UNITS = [
     icon: 'calculator',
     color: COLORS.gold,
     lessons: [
-      { id: 17, title: 'Numbers 0-3', words: ['0', '1', '2', '3'], xp: 10, completed: false },
-      { id: 18, title: 'Numbers 4-6', words: ['4', '5', '6'], xp: 10, completed: false },
-      { id: 19, title: 'Numbers 7-10', words: ['7', '8', '9', '10'], xp: 10, completed: false },
-      { id: 20, title: 'Practice Numbers', words: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], xp: 20, completed: false },
+      { id: 17, title: 'Numbers 0-3', words: ['0', '1', '2', '3'], xp: 30, completed: false },
+      { id: 18, title: 'Numbers 4-6', words: ['4', '5', '6'], xp: 30, completed: false },
+      { id: 19, title: 'Numbers 7-10', words: ['7', '8', '9', '10'], xp: 30, completed: false },
+      { id: 20, title: 'Practice Numbers', words: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], xp: 100, completed: false },
     ],
   },
   {
@@ -99,11 +99,12 @@ const UNITS = [
     icon: 'people',
     color: COLORS.teal,
     lessons: [
-      { id: 21, title: 'Me & You', words: ['ME', 'YOU'], xp: 10, completed: false },
-      { id: 22, title: 'He/She & My/Your', words: ['HE/SHE', 'MY', 'YOUR'], xp: 10, completed: false },
-      { id: 23, title: 'Mother & Father', words: ['MOTHER', 'FATHER'], xp: 10, completed: false },
-      { id: 24, title: 'Child & Family', words: ['CHILD', 'UNCLE', 'AUNT'], xp: 10, completed: false },
-      { id: 25, title: 'Practice Personal', words: ['ME/I', 'YOU', 'HE/SHE', 'MY', 'YOUR', 'MOTHER', 'FATHER', 'CHILD', 'UNCLE', 'AUNT'], xp: 20, completed: false },
+      { id: 21, title: 'Me & MY', words: ['ME', 'MY'], xp: 30, completed: false },
+      { id: 22, title: 'You & Your', words: ['YOU', 'YOUR'], xp: 30, completed: false },
+      { id: 23, title: 'Mother & Father', words: ['MOTHER', 'FATHER'], xp: 30, completed: false },
+      { id: 24, title: 'Uncle & Aunt', words: ['UNCLE', 'AUNT'], xp: 30, completed: false },
+      { id: 25, title: 'He/She & Child', words: ['HE/SHE', 'CHILD'], xp: 30, completed: false },
+      { id: 26, title: 'Practice Personal', words: ['ME/I', 'MY', 'YOU', 'YOUR', 'MOTHER', 'FATHER', 'UNCLE', 'AUNT','HE/SHE', 'CHILD'], xp: 100, completed: false },
     ],
   },
   {
@@ -113,12 +114,12 @@ const UNITS = [
     icon: 'heart',
     color: COLORS.pink,
     lessons: [
-      { id: 26, title: 'Good & Bad', words: ['GOOD', 'BAD'], xp: 10, completed: false },
-      { id: 27, title: 'Like & Proud', words: ['LIKE', 'PROUD'], xp: 10, completed: false },
-      { id: 28, title: 'MAD & Funny', words: ['MAD', 'FUNNY'], xp: 10, completed: false },
-      { id: 29, title: 'Hungry & Thirsty', words: ['HUNGRY', 'THIRSTY'], xp: 10, completed: false },
-      { id: 30, title: 'Lonely & Hot', words: ['LONELY','HOT'], xp: 10, completed: false },
-      { id: 31, title: 'Practice Emotions', words: ['GOOD', 'BAD', 'LIKE', 'PROUD', 'ANGRY', 'FUNNY', 'HUNGRY', 'THIRSTY', 'LONELY', 'HOT'], xp: 20, completed: false },
+      { id: 27, title: 'Good & Bad', words: ['GOOD', 'BAD'], xp: 30, completed: false },
+      { id: 28, title: 'Like & Proud', words: ['LIKE', 'PROUD'], xp: 30, completed: false },
+      { id: 29, title: 'MAD & Funny', words: ['MAD', 'FUNNY'], xp: 30, completed: false },
+      { id: 30, title: 'Hungry & Thirsty', words: ['HUNGRY', 'THIRSTY'], xp: 30, completed: false },
+      { id: 31, title: 'Lonely & Hot', words: ['LONELY','HOT'], xp: 30, completed: false },
+      { id: 32, title: 'Practice Emotions', words: ['GOOD', 'BAD', 'LIKE', 'PROUD', 'ANGRY', 'FUNNY', 'HUNGRY', 'THIRSTY', 'LONELY', 'HOT'], xp: 100, completed: false },
     ],
   },
   {
@@ -128,12 +129,12 @@ const UNITS = [
     icon: 'help-circle',
     color: COLORS.orange,
     lessons: [
-      { id: 32, title: 'Who & Where', words: ['WHO', 'WHERE'], xp: 10, completed: false },
-      { id: 33, title: 'Why & Later', words: ['WHY', 'LATER'], xp: 10, completed: false },
-      { id: 34, title: 'Soon & Same', words: ['SOON', 'SAME'], xp: 10, completed: false },
-      { id: 35, title: 'Left & Right', words: ['LEFT', 'RIGHT'], xp: 10, completed: false },
-      { id: 36, title: 'Yesterday & Tomorrow', words: ['YESTERDAY', 'TOMORROW'], xp: 10, completed: false },
-      { id: 37, title: 'Practice Questions', words: ['WHO', 'WHERE', 'WHY', 'LATER', 'SOON', 'SAME', 'LEFT', 'RIGHT', 'YESTERDAY', 'TOMORROW'], xp: 20, completed: false },
+      { id: 33, title: 'Who & Where', words: ['WHO', 'WHERE'], xp: 30, completed: false },
+      { id: 34, title: 'Why & Later', words: ['WHY', 'LATER'], xp: 30, completed: false },
+      { id: 35, title: 'Soon & Same', words: ['SOON', 'SAME'], xp: 30, completed: false },
+      { id: 36, title: 'Left & Right', words: ['LEFT', 'RIGHT'], xp: 30, completed: false },
+      { id: 37, title: 'Yesterday & Tomorrow', words: ['YESTERDAY', 'TOMORROW'], xp: 30, completed: false },
+      { id: 38, title: 'Practice Questions', words: ['WHO', 'WHERE', 'WHY', 'LATER', 'SOON', 'SAME', 'LEFT', 'RIGHT', 'YESTERDAY', 'TOMORROW'], xp: 100, completed: false },
     ],
   },
   {
@@ -143,21 +144,15 @@ const UNITS = [
     icon: 'home',
     color: COLORS.emerald,
     lessons: [
-      { id: 38, title: 'True & False', words: ['TRUE', 'FALSE'], xp: 10, completed: false },
-      { id: 39, title: 'Water & Food', words: ['WATER', 'FOOD'], xp: 10, completed: false },
-      { id: 40, title: 'Home & Phone', words: ['HOME', 'PHONE'], xp: 10, completed: false },
-      { id: 41, title: 'Need & Bathroom', words: ['NEED', 'BATHROOM'], xp: 10, completed: false },
-      { id: 42, title: 'Finish & Understand', words: ['FINISH', 'UNDERSTAND'], xp: 10, completed: false },
-      { id: 43, title: 'Practice Daily Words', words: ['TRUE', 'FALSE', 'WATER', 'FOOD', 'HOME', 'PHONE', 'NEED', 'BATHROOM', 'FINISH', 'UNDERSTAND'], xp: 20, completed: false },
+      { id: 39, title: 'True & False', words: ['TRUE', 'FALSE'], xp: 30, completed: false },
+      { id: 40, title: 'Water & Food', words: ['WATER', 'FOOD'], xp: 30, completed: false },
+      { id: 41, title: 'Home & Phone', words: ['HOME', 'PHONE'], xp: 30, completed: false },
+      { id: 42, title: 'Need & Bathroom', words: ['NEED', 'BATHROOM'], xp: 30, completed: false },
+      { id: 43, title: 'Finish & Understand', words: ['FINISH', 'UNDERSTAND'], xp: 30, completed: false },
+      { id: 44, title: 'Practice Daily Words', words: ['TRUE', 'FALSE', 'WATER', 'FOOD', 'HOME', 'PHONE', 'NEED', 'BATHROOM', 'FINISH', 'UNDERSTAND'], xp: 100, completed: false },
     ],
   },
 ];
-
-interface User {
-  full_name: string;
-  xp: number;
-  streak: number;
-}
 
 // Lesson position types
 type LessonPosition = 'left' | 'center' | 'right';
@@ -201,14 +196,42 @@ const LessonConnector: React.FC<ConnectorProps> = ({ startX, startY, endX, endY,
 export default function HomeScreen() {
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
-  const [user, setUser] = useState<User | null>(null);
-  const [currentLesson, setCurrentLesson] = useState(1); // First lesson to start
-  
+  const { userXP, completedLessonIds, streak, userName } = useUser();
+
+  // Derive units with live completion status from context
+  const units = useMemo(() =>
+    UNITS.map(unit => ({
+      ...unit,
+      lessons: unit.lessons.map(lesson => ({
+        ...lesson,
+        completed: completedLessonIds.includes(lesson.id),
+      })),
+    })),
+    [completedLessonIds],
+  );
+
+  // First incomplete lesson (active node)
+  const currentLesson = useMemo(() => {
+    for (const unit of units) {
+      for (const lesson of unit.lessons) {
+        if (!lesson.completed) return lesson.id;
+      }
+    }
+    return units[units.length - 1]?.lessons.slice(-1)[0]?.id ?? 1;
+  }, [units]);
+
+  // Current unit for the progress card
+  const currentUnit = useMemo(() => {
+    for (const unit of units) {
+      if (unit.lessons.some(l => !l.completed)) return unit;
+    }
+    return units[units.length - 1];
+  }, [units]);
+
   // Pulsing animation for current lesson
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    loadUserData();
     startPulseAnimation();
   }, []);
 
@@ -231,17 +254,6 @@ export default function HomeScreen() {
     ).start();
   };
 
-  const loadUserData = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('userData');
-      if (userData) {
-        setUser(JSON.parse(userData));
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
-
   const getUnitProgress = (unit: typeof UNITS[0]) => {
     const completed = unit.lessons.filter(l => l.completed).length;
     return (completed / unit.lessons.length) * 100;
@@ -249,29 +261,48 @@ export default function HomeScreen() {
 
   const isUnitLocked = (unitIndex: number) => {
     if (unitIndex === 0) return false;
-    const prevUnit = UNITS[unitIndex - 1];
+    const prevUnit = units[unitIndex - 1];
     return prevUnit.lessons.some(l => !l.completed);
   };
 
-  const isLessonLocked = (lesson: typeof UNITS[0]['lessons'][0], lessonIndex: number, unitIndex: number) => {
+  const isLessonLocked = (lesson: typeof units[0]['lessons'][0], lessonIndex: number, unitIndex: number) => {
     if (lesson.completed) return false;
     if (unitIndex === 0 && lessonIndex === 0) return false;
     
     // Check if previous lesson in same unit is completed
     if (lessonIndex > 0) {
-      return !UNITS[unitIndex].lessons[lessonIndex - 1].completed;
+      return !units[unitIndex].lessons[lessonIndex - 1].completed;
     }
     
     // First lesson of unit - check if previous unit is complete
     if (unitIndex > 0) {
-      const prevUnit = UNITS[unitIndex - 1];
+      const prevUnit = units[unitIndex - 1];
       return !prevUnit.lessons[prevUnit.lessons.length - 1].completed;
     }
     
     return false;
   };
 
-  const handleLessonPress = (lesson: typeof UNITS[0]['lessons'][0], locked: boolean) => {
+  const getNextLesson = () => {
+    // Find the first incomplete lesson
+    for (const unit of units) {
+      for (const lesson of unit.lessons) {
+        if (!lesson.completed) {
+          return lesson;
+        }
+      }
+    }
+    return null; // All lessons completed
+  };
+
+  const handleContinuePress = () => {
+    const nextLesson = getNextLesson();
+    if (nextLesson) {
+      handleLessonPress(nextLesson, false);
+    }
+  };
+
+  const handleLessonPress = (lesson: typeof units[0]['lessons'][0], locked: boolean) => {
     if (locked) return;
     // Navigate to flashcard screen with lesson details
     router.push({
@@ -280,6 +311,7 @@ export default function HomeScreen() {
         lessonId: lesson.id,
         title: lesson.title,
         xp: lesson.xp,
+        words: JSON.stringify(lesson.words),
       },
     });
   };
@@ -324,18 +356,18 @@ export default function HomeScreen() {
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>
-              {user ? `Hi, ${user.full_name.split(' ')[0]}!` : 'Welcome!'}
+              {userName ? `Hi, ${userName.split(' ')[0]}!` : 'Welcome!'}
             </Text>
             <Text style={styles.subGreeting}>Continue your journey</Text>
           </View>
           <View style={styles.headerStats}>
             <View style={styles.statPill}>
               <Ionicons name="flash" size={16} color={COLORS.gold} />
-              <Text style={styles.statText}>{user?.xp || 0}</Text>
+              <Text style={styles.statText}>{userXP}</Text>
             </View>
             <View style={styles.statPill}>
               <Ionicons name="flame" size={16} color={COLORS.orange} />
-              <Text style={styles.statText}>{user?.streak || 0}</Text>
+              <Text style={styles.statText}>{streak}</Text>
             </View>
           </View>
         </View>
@@ -352,15 +384,15 @@ export default function HomeScreen() {
           <View style={styles.progressContent}>
             <View style={styles.progressLeft}>
               <Text style={styles.progressLabel}>CURRENT UNIT</Text>
-              <Text style={styles.progressTitle}>{UNITS[0].title}</Text>
+              <Text style={styles.progressTitle}>{currentUnit.title}</Text>
               <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { width: `${getUnitProgress(UNITS[0])}%` }]} />
+                <View style={[styles.progressBar, { width: `${getUnitProgress(currentUnit)}%` }]} />
               </View>
               <Text style={styles.progressSubtext}>
-                {UNITS[0].lessons.filter(l => l.completed).length}/{UNITS[0].lessons.length} lessons • {Math.round(getUnitProgress(UNITS[0]))}%
+                {currentUnit.lessons.filter(l => l.completed).length}/{currentUnit.lessons.length} lessons • {Math.round(getUnitProgress(currentUnit))}%
               </Text>
             </View>
-            <TouchableOpacity style={styles.continueButton}>
+            <TouchableOpacity style={styles.continueButton} onPress={handleContinuePress}>
               <Ionicons name="play" size={28} color={COLORS.emerald} />
             </TouchableOpacity>
           </View>
@@ -374,9 +406,9 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.mapContainer}>
-          {UNITS.map((unit, unitIndex) => {
+          {units.map((unit, unitIndex) => {
             const locked = isUnitLocked(unitIndex);
-            const baseIndex = UNITS.slice(0, unitIndex).reduce((sum, u) => sum + u.lessons.length, 0);
+            const baseIndex = units.slice(0, unitIndex).reduce((sum, u) => sum + u.lessons.length, 0);
             
             // 1. REDUCED DISTANCE: Changed from 130 to 100
             const ROW_HEIGHT = 100; 
@@ -481,7 +513,7 @@ export default function HomeScreen() {
                           activeOpacity={0.8}
                         >
                           {lesson.completed ? (
-                            <Ionicons name="checkmark" size={30} color="#FFF" />
+                            <Ionicons name="refresh" size={26} color="#FFF" />
                           ) : lessonLocked ? (
                             <Ionicons name="lock-closed" size={24} color="#64748B" />
                           ) : isNext ? (

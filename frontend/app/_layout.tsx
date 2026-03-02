@@ -12,6 +12,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { QuestProvider } from '@/contexts/QuestContext';
+import { UserProvider, useUser } from '@/contexts/UserContext';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -20,26 +22,25 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-export default function RootLayout() {
+/** Inner component so we can use useUser() inside UserProvider */
+function InnerLayout() {
   const colorScheme = useColorScheme();
-  
-  const [fontsLoaded] = useFonts({
-    'Nunito-Regular': Nunito_400Regular,
-    'Nunito-SemiBold': Nunito_600SemiBold,
-    'Nunito-Bold': Nunito_700Bold,
-  });
+  const { sendHeartbeat, syncProgressToBackend } = useUser();
 
+  // ── Heartbeat: ping backend every 60 s so admin sees "Online" ──
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) {
-    return null;
-  }
+    // Fire once immediately on mount (only if we have a token)
+    const run = async () => {
+      const ok = await sendHeartbeat();
+      if (ok) syncProgressToBackend(); // also sync streak/weakSigns
+    };
+    run();
+    const id = setInterval(run, 60_000);
+    return () => clearInterval(id);
+  }, [sendHeartbeat, syncProgressToBackend]);
 
   return (
+    <QuestProvider>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -58,5 +59,30 @@ export default function RootLayout() {
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
+    </QuestProvider>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    'Nunito-Regular': Nunito_400Regular,
+    'Nunito-SemiBold': Nunito_600SemiBold,
+    'Nunito-Bold': Nunito_700Bold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  return (
+    <UserProvider>
+      <InnerLayout />
+    </UserProvider>
   );
 }

@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
+import { useUser } from '@/contexts/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -121,6 +122,7 @@ const CircularProgress = ({ percentage, size, color }: { percentage: number, siz
 
 export default function LearningStatsScreen() {
   const router = useRouter();
+  const { userXP, userLevel, xpToNextLevel, completedLessonIds } = useUser();
   const [stats, setStats] = useState<UserStats>({
     totalXP: 0,
     level: 1,
@@ -132,7 +134,7 @@ export default function LearningStatsScreen() {
     signsLearned: 0
   });
 
-  const weeklyXP = [45, 30, 0, 60, 25, 50, 35];
+  const [weeklyXP, setWeeklyXP] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   useEffect(() => {
@@ -141,20 +143,43 @@ export default function LearningStatsScreen() {
 
   const loadStats = async () => {
     try {
+      // Load user data (XP comes from server via userData)
       const userData = await AsyncStorage.getItem('userData');
-      if (userData) {
-        const parsed = JSON.parse(userData);
-        setStats({
-          totalXP: parsed.xp || 0,
-          level: Math.floor((parsed.xp || 0) / 100) + 1,
-          streak: parsed.streak || 0,
-          lessonsCompleted: parsed.lessons_completed || 0,
-          quizzesTaken: parsed.quizzes_taken || 0,
-          averageAccuracy: parsed.average_accuracy || 85,
-          timeSpent: parsed.time_spent || 0,
-          signsLearned: parsed.signs_learned || 0
-        });
+      const parsed = userData ? JSON.parse(userData) : {};
+      const totalXP = parsed.xp || 0;
+
+      // Load all locally tracked stats
+      const streak = Number(await AsyncStorage.getItem('dayStreak') || '0');
+      const lessonsCompleted = Number(await AsyncStorage.getItem('lessonsCompletedCount') || '0');
+      const quizzesTaken = Number(await AsyncStorage.getItem('quizzesAttempted') || '0');
+      const timeSpent = Number(await AsyncStorage.getItem('timeSpentMinutes') || '0');
+
+      // Accuracy: correct / total questions
+      const totalCorrect = Number(await AsyncStorage.getItem('totalCorrectAnswers') || '0');
+      const totalQuestions = Number(await AsyncStorage.getItem('totalQuestionsAnswered') || '0');
+      const averageAccuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+
+      // Signs learned
+      const signsData = await AsyncStorage.getItem('signsLearned');
+      const signsArray: string[] = signsData ? JSON.parse(signsData) : [];
+      const signsLearned = signsArray.length;
+
+      // Weekly XP
+      const weeklyData = await AsyncStorage.getItem('weeklyXP');
+      if (weeklyData) {
+        setWeeklyXP(JSON.parse(weeklyData));
       }
+
+      setStats({
+        totalXP,
+        level: Math.floor(totalXP / 100) + 1,
+        streak,
+        lessonsCompleted,
+        quizzesTaken,
+        averageAccuracy,
+        timeSpent,
+        signsLearned,
+      });
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -167,7 +192,7 @@ export default function LearningStatsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Dashboard</Text>
+        <Text style={styles.headerTitle}>Stats</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -218,7 +243,7 @@ export default function LearningStatsScreen() {
               style={styles.bentoGradient}
             >
               <Text style={styles.bentoIcon}>⚡</Text>
-              <Text style={styles.bentoValue}>{stats.totalXP}</Text>
+              <Text style={styles.bentoValue}>{userXP}</Text>
               <Text style={styles.bentoLabel}>Total XP</Text>
             </LinearGradient>
           </View>
@@ -237,7 +262,7 @@ export default function LearningStatsScreen() {
               <View style={styles.bentoIconContainer}>
                 <Ionicons name="book" size={28} color={COLORS.purple} />
               </View>
-              <Text style={styles.bentoValueDark}>{stats.lessonsCompleted}</Text>
+              <Text style={styles.bentoValueDark}>{completedLessonIds.length}</Text>
               <Text style={styles.bentoLabelDark}>Lessons</Text>
             </View>
           </View>
@@ -252,7 +277,7 @@ export default function LearningStatsScreen() {
           <View style={styles.milestoneHeader}>
             <Text style={styles.milestoneIcon}>🏆</Text>
             <View style={styles.milestoneInfo}>
-              <Text style={styles.milestoneTitle}>Reach Level {stats.level + 1}</Text>
+              <Text style={styles.milestoneTitle}>Reach Level {userLevel + 1}</Text>
               <Text style={styles.milestoneSubtitle}>Keep going, you&apos;re almost there!</Text>
             </View>
           </View>
@@ -262,10 +287,10 @@ export default function LearningStatsScreen() {
                 colors={[COLORS.emerald, COLORS.teal]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={[styles.milestoneProgressFill, { width: `${stats.totalXP % 100}%` }]}
+                style={[styles.milestoneProgressFill, { width: `${xpToNextLevel}%` }]}
               />
             </View>
-            <Text style={styles.milestoneProgressText}>{stats.totalXP % 100}/100 XP</Text>
+            <Text style={styles.milestoneProgressText}>{xpToNextLevel}/100 XP</Text>
           </View>
         </LinearGradient>
 

@@ -476,10 +476,10 @@
         <div class="header">
             <h1 class="page-title">Top Performers</h1>
             <select class="date-filter" id="periodFilter" style="cursor: pointer; border: 1px solid #E8E0D8; padding: 8px 16px; border-radius: 8px; background: #FFFBF7; color: #5f6368; font-size: 14px;">
-                <option value="all">📅 All Time</option>
+                <option value="all" selected>📅 All Time</option>
                 <option value="7days">📅 Last 7 Days</option>
                 <option value="30days">📅 Last 30 Days</option>
-                <option value="thisMonth" selected>📅 This Month</option>
+                <option value="thisMonth">📅 This Month</option>
             </select>
         </div>
 
@@ -586,14 +586,18 @@
         }
 
         function updatePodium(users) {
-            const places = ['first', 'second', 'third'];
-            const indices = [0, 1, 2];
-            
-            indices.forEach((idx, i) => {
-                const place = document.getElementById(`${places[i === 0 ? 1 : i === 1 ? 0 : 2]}-place`);
-                if (users[idx]) {
-                    place.querySelector('.podium-name').textContent = users[idx].full_name || 'Unknown';
-                    place.querySelector('.podium-xp').textContent = `${users[idx].xp || 0} XP`;
+            // Visual podium layout: 2nd place left, 1st place centre, 3rd place right
+            const podiumMap = [
+                { placeId: 'second-place', userIndex: 1 },
+                { placeId: 'first-place',  userIndex: 0 },
+                { placeId: 'third-place',  userIndex: 2 },
+            ];
+
+            podiumMap.forEach(({ placeId, userIndex }) => {
+                const place = document.getElementById(placeId);
+                if (users[userIndex]) {
+                    place.querySelector('.podium-name').textContent = users[userIndex].full_name || 'Unknown';
+                    place.querySelector('.podium-xp').textContent = `${users[userIndex].xp || 0} XP`;
                 } else {
                     place.querySelector('.podium-name').textContent = '-';
                     place.querySelector('.podium-xp').textContent = '0 XP';
@@ -611,7 +615,18 @@
                 return;
             }
             
-            tbody.innerHTML = users.map((user, index) => `
+            tbody.innerHTML = users.map((user, index) => {
+                const lessons = user.lessons_completed != null ? user.lessons_completed : 0;
+                const accuracy = user.quiz_accuracy != null ? user.quiz_accuracy : null;
+                const accuracyCell = accuracy != null
+                    ? `<div style="display: flex; align-items: center; gap: 12px;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${accuracy}%"></div>
+                            </div>
+                            <span class="accuracy">${accuracy}%</span>
+                        </div>`
+                    : `<span style="color: #aaa; font-size: 13px;">N/A</span>`;
+                return `
                 <tr>
                     <td class="rank-cell">${index < 3 ? badges[index] : `#${index + 1}`}</td>
                     <td>
@@ -624,17 +639,10 @@
                         </div>
                     </td>
                     <td class="xp-cell">${user.xp || 0} XP</td>
-                    <td>${user.lessons_completed || Math.floor(Math.random() * 20)}</td>
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: ${user.quiz_accuracy || Math.floor(Math.random() * 100)}%"></div>
-                            </div>
-                            <span class="accuracy">${user.quiz_accuracy || Math.floor(Math.random() * 100)}%</span>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+                    <td>${lessons}</td>
+                    <td>${accuracyCell}</td>
+                </tr>`;
+            }).join('');
         }
 
         function filterUsers() {
@@ -655,6 +663,9 @@
         document.getElementById('periodFilter').addEventListener('change', fetchTopPerformers);
 
         fetchTopPerformers();
+
+        // Auto-refresh every 30 seconds so XP/rankings stay current
+        setInterval(fetchTopPerformers, 30000);
     </script>
 </body>
 </html>

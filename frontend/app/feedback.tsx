@@ -106,8 +106,8 @@ export default function FeedbackScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!message.trim()) {
-      showAlert('Error', 'Please enter your feedback message', [{ text: 'OK' }], 'error');
+    if (rating === 0) {
+      showAlert('Error', 'Please provide a star rating', [{ text: 'OK' }], 'error');
       return;
     }
 
@@ -118,7 +118,7 @@ export default function FeedbackScreen() {
         user_email: userEmail,
         rating: rating,
         category: category,
-        message: message.trim()
+        message: message.trim() || ''
       });
 
       if (response.status === 201) {
@@ -220,7 +220,7 @@ export default function FeedbackScreen() {
           <View style={styles.textAreaContainer}>
             <TextInput
               style={styles.textArea}
-              placeholder="Tell us what you think..."
+              placeholder="(Optional) Tell us what you think..."
               placeholderTextColor={COLORS.textSecondary}
               multiline
               numberOfLines={5}

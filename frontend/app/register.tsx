@@ -1,13 +1,14 @@
 // frontend/app/register.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode, Audio } from 'expo-av';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
 import { AppColors } from '@/constants/colors';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
+import { playBackgroundMusic, stopSound } from '@/utils/audio';
 
 const { width, height } = Dimensions.get('window'); 
 
@@ -25,6 +26,22 @@ export default function RegisterScreen() {
   
   // Custom alert hook
   const { alertConfig, showAlert, hideAlert } = useCustomAlert();
+  
+  // Background music ref
+  const backgroundMusic = useRef<Audio.Sound | null>(null);
+
+  // Play background music when component mounts
+  useEffect(() => {
+    const playMusic = async () => {
+      backgroundMusic.current = await playBackgroundMusic();
+    };
+    playMusic();
+
+    // Cleanup: stop music when component unmounts
+    return () => {
+      stopSound(backgroundMusic.current);
+    };
+  }, []);
 
   const validateFullName = (name: string): boolean => {
     // Minimum 3 characters, alphabets only (capital or non-capital), spaces allowed
@@ -123,6 +140,9 @@ export default function RegisterScreen() {
       });
 
       if (response.status === 201) {
+        // Stop background music
+        await stopSound(backgroundMusic.current);
+        
         showAlert('Success', 'Account created successfully! Please log in.', [
           { text: 'OK', onPress: () => router.back() }
         ], 'success');

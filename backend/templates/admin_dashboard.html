@@ -368,9 +368,9 @@
                 <p class="page-subtitle">Welcome back, get an overview of your platform metrics.</p>
             </div>
             <select class="date-filter" id="periodFilter" style="cursor: pointer; border: 1px solid #E8E0D8; padding: 8px 16px; border-radius: 8px; background: #FFFBF7; color: #5f6368; font-size: 14px;">
-                <option value="all">📅 All Time</option>
+                <option value="all" selected>📅 All Time</option>
                 <option value="7days">📅 Last 7 Days</option>
-                <option value="30days" selected>📅 Last 30 Days</option>
+                <option value="30days">📅 Last 30 Days</option>
                 <option value="thisMonth">📅 This Month</option>
             </select>
         </div>
@@ -380,7 +380,7 @@
             <div class="stat-card">
                 <div class="stat-header">
                     <div class="stat-icon">🎓</div>
-                    <span class="stat-label">Total Students</span>
+                    <span class="stat-label">Total Users</span>
                 </div>
                 <div class="stat-value" id="totalStudents">0</div>
             </div>
@@ -483,6 +483,9 @@
 
         // Load stats on page load
         fetchStats();
+
+        // Auto-refresh every 30 seconds so stats stay current
+        setInterval(fetchStats, 30000);
     </script>
 </body>
 </html>
