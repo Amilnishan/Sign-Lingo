@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
+import { CustomAlert } from '@/components/custom-alert';
 import { playSound } from '@/utils/audio';
 import { useQuests } from '@/contexts/QuestContext';
 import { recordSignAttempt } from '@/utils/weaknessStorage';
@@ -104,6 +105,7 @@ export default function QuizScreen() {
   const [showResults, setShowResults] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [isSkipped, setIsSkipped] = useState(false);
+  const [showQuitAlert, setShowQuitAlert] = useState(false);
 
   // Camera state for show_sign questions
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -633,7 +635,7 @@ export default function QuizScreen() {
 
       {/* Custom Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => setShowQuitAlert(true)}>
           <Ionicons name="close" size={24} color={DarkTheme.text} />
         </TouchableOpacity>
         
@@ -932,6 +934,19 @@ export default function QuizScreen() {
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Quit Confirmation Alert */}
+      <CustomAlert
+        visible={showQuitAlert}
+        title="Quit Lesson?"
+        message="Are you sure you want to quit? Your progress in this lesson will be lost."
+        type="warning"
+        onClose={() => setShowQuitAlert(false)}
+        buttons={[
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Quit', style: 'destructive', onPress: () => router.back() },
+        ]}
+      />
     </SafeAreaView>
   );
 }

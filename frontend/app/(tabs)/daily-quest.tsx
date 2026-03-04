@@ -1,5 +1,5 @@
 // frontend/app/(tabs)/daily-quest.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,28 @@ import { useQuests, Quest } from '@/contexts/QuestContext';
 import { useUser } from '@/contexts/UserContext';
 
 const { width } = Dimensions.get('window');
+
+// ─── Countdown Hook ──────────────────────────────────────────────
+function useResetCountdown() {
+  const getRemaining = () => {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return Math.max(0, midnight.getTime() - now.getTime());
+  };
+
+  const [ms, setMs] = useState(getRemaining);
+
+  useEffect(() => {
+    const id = setInterval(() => setMs(getRemaining()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const totalMin = Math.floor(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h ${m.toString().padStart(2, '0')}m`;
+}
 
 // ─── Design tokens ───────────────────────────────────────────────
 const C = {
@@ -127,10 +149,49 @@ function QuestCard({ quest, onClaim }: { quest: Quest; onClaim: () => void }) {
   );
 }
 
+// ─── Animated Flame Glow ─────────────────────────────────────────
+function MotivationCard() {
+  const glow = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 1800, useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 0.4, duration: 1800, useNativeDriver: false }),
+      ]),
+    ).start();
+  }, []);
+
+  const glowOpacity = glow.interpolate({ inputRange: [0.4, 1], outputRange: [0.25, 0.6] });
+
+  return (
+    <View style={styles.motionOuter}>
+      {/* Soft orange glow behind the card */}
+      <Animated.View style={[styles.motionGlow, { opacity: glowOpacity }]} />
+
+      <View style={styles.motionCard}>
+        {/* Flame icon */}
+        <View style={styles.motionIconWrap}>
+          <Ionicons name="flame" size={38} color={C.orange} />
+        </View>
+
+        {/* Text */}
+        <View style={styles.motionTextWrap}>
+          <Text style={styles.motionTitle}>Build Your Habit</Text>
+          <Text style={styles.motionSub}>
+            Completing daily missions every day builds your streak faster. Don't break the chain!
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 // ─── Screen ──────────────────────────────────────────────────────
 export default function DailyQuestScreen() {
   const { quests, loading, claimQuest } = useQuests();
   const { addXP } = useUser();
+  const timeLeft = useResetCountdown();
 
   const handleClaim = (quest: Quest) => {
     claimQuest(quest.id);
@@ -138,21 +199,7 @@ export default function DailyQuestScreen() {
   };
 
   const completedCount = quests.filter(q => q.completed).length;
-  const claimedCount = quests.filter(q => q.claimed).length;
   const totalCount = quests.length || 3;
-  const pct = Math.round((completedCount / totalCount) * 100);
-  const allDone = claimedCount === totalCount && totalCount > 0;
-
-  const chestAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (allDone) {
-      Animated.sequence([
-        Animated.timing(chestAnim, { toValue: 1.15, duration: 250, useNativeDriver: true }),
-        Animated.timing(chestAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [allDone]);
 
   if (loading) {
     return (
@@ -166,54 +213,28 @@ export default function DailyQuestScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Daily Missions</Text>
+        <View>
+          <Text style={styles.headerTitle}>Daily Missions</Text>
+          <Text style={styles.headerSubtitle}>Consistency is the key to fluency!</Text>
+        </View>
         <View style={styles.headerBadge}>
           <Ionicons name="flash" size={16} color={C.gold} />
           <Text style={styles.headerBadgeText}>{completedCount}/{totalCount}</Text>
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Treasure Card */}
-        <LinearGradient
-          colors={allDone ? [C.emerald, C.teal] : [`${C.card}E6`, C.card]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.treasure}
-        >
-          <View style={styles.treasureTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.treasureTag, allDone && { color: '#FFF' }]}>
-                {allDone ? 'ALL COMPLETE!' : 'DAILY GOAL'}
-              </Text>
-              <Text style={[styles.treasureTitle, allDone && { color: '#FFF' }]}>
-                {allDone ? 'Claim Your Reward!' : 'Unlock the Chest'}
-              </Text>
-            </View>
-            <Animated.View style={{ transform: [{ scale: chestAnim }] }}>
-              <View style={[styles.chestBox, allDone && styles.chestBoxDone]}>
-                <Text style={{ fontSize: 44 }}>{allDone ? '🎁' : '📦'}</Text>
-              </View>
-            </Animated.View>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: 4, paddingBottom: 40 }}
+      >
+        {/* Timer pill */}
+        <View style={styles.timerRow}>
+          <View style={styles.timerPill}>
+            <Text style={styles.timerEmoji}>⏳</Text>
+            <Text style={styles.timerText}>Resets in {timeLeft}</Text>
           </View>
-
-          {/* Master progress bar */}
-          <View style={styles.masterBarBg}>
-            <LinearGradient
-              colors={[C.emerald, C.teal]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.masterBarFill, { width: `${pct}%` }]}
-            />
-          </View>
-          <Text style={[styles.treasureSub, allDone && { color: 'rgba(255,255,255,0.9)' }]}>
-            {allDone
-              ? '✨ Amazing work! All missions completed!'
-              : completedCount === totalCount
-                ? `Claim your rewards to unlock the chest!`
-                : `Complete ${totalCount - completedCount} more quest${totalCount - completedCount > 1 ? 's' : ''} to unlock!`}
-          </Text>
-        </LinearGradient>
+        </View>
 
         {/* Quest list */}
         <Text style={styles.sectionTitle}>⚔️ Active Missions</Text>
@@ -222,7 +243,8 @@ export default function DailyQuestScreen() {
           <QuestCard key={q.id} quest={q} onClaim={() => handleClaim(q)} />
         ))}
 
-        <View style={{ height: 40 }} />
+        {/* Motivational card */}
+        <MotivationCard />
       </ScrollView>
     </View>
   );
@@ -233,13 +255,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingTop: 60,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 12,
   },
   headerTitle: { fontSize: 28, fontFamily: 'Nunito-Bold', color: C.text, letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 14, fontFamily: 'Nunito-Regular', color: C.sub, marginTop: 4 },
   headerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,44 +273,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.cardBorder,
     gap: 6,
+    marginTop: 4,
   },
   headerBadgeText: { fontSize: 15, fontFamily: 'Nunito-Bold', color: C.gold },
   scroll: { flex: 1, paddingHorizontal: 20 },
 
-  // Treasure card
-  treasure: {
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: C.cardBorder,
-  },
-  treasureTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  treasureTag: { fontSize: 12, fontFamily: 'Nunito-Bold', color: C.emerald, letterSpacing: 1.5, marginBottom: 4 },
-  treasureTitle: { fontSize: 22, fontFamily: 'Nunito-Bold', color: C.text },
-  chestBox: {
-    width: 76,
-    height: 76,
-    borderRadius: 20,
-    backgroundColor: 'rgba(148,163,184,0.2)',
+  // Timer pill
+  timerRow: { alignItems: 'flex-start', marginBottom: 20 },
+  timerPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(148,163,184,0.3)',
+    backgroundColor: 'rgba(249,115,22,0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.25)',
+    gap: 6,
   },
-  chestBoxDone: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  masterBarBg: {
-    height: 14,
-    backgroundColor: 'rgba(148,163,184,0.2)',
-    borderRadius: 7,
-    overflow: 'hidden',
-    marginBottom: 10,
-  },
-  masterBarFill: { height: '100%', borderRadius: 7 },
-  treasureSub: { fontSize: 14, fontFamily: 'Nunito-Regular', color: C.sub, lineHeight: 20 },
+  timerEmoji: { fontSize: 14 },
+  timerText: { fontSize: 13, fontFamily: 'Nunito-Bold', color: C.orange },
 
   sectionTitle: { fontSize: 18, fontFamily: 'Nunito-Bold', color: C.text, marginBottom: 14 },
 
@@ -361,6 +366,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Nunito-Bold',
     color: '#fff',
+  },
+
+  // Motivation card
+  motionOuter: {
+    marginTop: 20,
+    position: 'relative',
+  },
+  motionGlow: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: -6,
+    borderRadius: 28,
+    backgroundColor: C.orange,
+  },
+  motionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${C.card}F0`,
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(249,115,22,0.3)',
+  },
+  motionIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(249,115,22,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  motionTextWrap: { flex: 1 },
+  motionTitle: {
+    fontSize: 17,
+    fontFamily: 'Nunito-Bold',
+    color: C.text,
+    marginBottom: 4,
+  },
+  motionSub: {
+    fontSize: 13,
+    fontFamily: 'Nunito-Regular',
+    color: C.sub,
+    lineHeight: 19,
   },
 });
 

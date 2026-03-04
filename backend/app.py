@@ -594,12 +594,12 @@ def get_all_users():
         query = {'role': 'user'}
         
         if period == '7days':
-            query['joined_at'] = {'$gte': now - datetime.timedelta(days=7)}
+            query['last_active'] = {'$gte': now - datetime.timedelta(days=7)}
         elif period == '30days':
-            query['joined_at'] = {'$gte': now - datetime.timedelta(days=30)}
+            query['last_active'] = {'$gte': now - datetime.timedelta(days=30)}
         elif period == 'thisMonth':
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            query['joined_at'] = {'$gte': start_of_month}
+            query['last_active'] = {'$gte': start_of_month}
         
         user_list = list(users.find(query, {'password': 0}).sort('xp', -1))
         

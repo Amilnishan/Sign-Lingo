@@ -32,6 +32,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_URL } from '@/constants/config';
 import { Fonts } from '@/constants/fonts';
+import { CustomAlert } from '@/components/custom-alert';
 import { playSound } from '@/utils/audio';
 import { useUser } from '@/contexts/UserContext';
 
@@ -95,6 +96,7 @@ export default function LivePracticeScreen() {
   const [isError, setIsError] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [feedbackMessage, setFeedbackMessage] = useState('Position your hand in frame');
+  const [showQuitAlert, setShowQuitAlert] = useState(false);
 
   // ── Animations ──
   // -1 = red (error)  |  0 = neutral (grey)  |  1 = green (success)
@@ -354,7 +356,7 @@ export default function LivePracticeScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => setShowQuitAlert(true)}>
           <Ionicons name="close" size={24} color={DarkTheme.text} />
         </TouchableOpacity>
 
@@ -479,6 +481,19 @@ export default function LivePracticeScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Quit Confirmation Alert */}
+      <CustomAlert
+        visible={showQuitAlert}
+        title="Quit Lesson?"
+        message="Are you sure you want to quit? Your progress in this lesson will be lost."
+        type="warning"
+        onClose={() => setShowQuitAlert(false)}
+        buttons={[
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Quit', style: 'destructive', onPress: () => router.back() },
+        ]}
+      />
     </SafeAreaView>
   );
 }
