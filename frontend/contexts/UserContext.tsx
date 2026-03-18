@@ -56,8 +56,16 @@ interface UserContextValue {
   streak: number;
   /** Signs the user struggles with */
   weakSigns: WeakSign[];
+  /** Number of unique signs learned */
+  signsLearned: number;
+  /** Total quizzes completed */
+  quizzesTaken: number;
+  /** Total time spent learning (minutes) */
+  timeSpent: number;
   /** User's display name (loaded from AsyncStorage) */
   userName: string;
+  /** Current user's email (used for namespacing storage) */
+  userEmail: string;
   /** true until the initial load from AsyncStorage finishes */
   loading: boolean;
 
@@ -80,10 +88,13 @@ interface UserContextValue {
   sendHeartbeat: () => Promise<boolean>;
   /** Force-reload everything from AsyncStorage. */
   refresh: () => Promise<void>;
+  /** Log out: wipe in-memory state back to defaults & remove session keys. */
+  logout: () => Promise<void>;
 }
 
-// ─── Storage keys ────────────────────────────────────────────────
-const WEAK_SIGNS_KEY = 'weakSigns';
+// ─── Helpers ─────────────────────────────────────────────────────
+/** Build a user-namespaced AsyncStorage key */
+const userKey = (email: string, key: string) => `${email}_${key}`;
 
 // ─── Context ─────────────────────────────────────────────────────
 const UserContext = createContext<UserContextValue>({
@@ -94,7 +105,11 @@ const UserContext = createContext<UserContextValue>({
   completedLessonIds: [],
   streak: 0,
   weakSigns: [],
+  signsLearned: 0,
+  quizzesTaken: 0,
+  timeSpent: 0,
   userName: '',
+  userEmail: '',
   loading: true,
   completeLesson: async () => {},
   addXP: async () => {},
@@ -105,6 +120,7 @@ const UserContext = createContext<UserContextValue>({
   syncProgressToBackend: async () => {},
   sendHeartbeat: async () => false,
   refresh: async () => {},
+  logout: async () => {},
 });
 
 export const useUser = () => useContext(UserContext);
@@ -115,32 +131,142 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [completedLessonIds, setCompletedLessonIds] = useState<number[]>([]);
   const [streak, setStreak] = useState(0);
   const [weakSigns, setWeakSigns] = useState<WeakSign[]>([]);
+  const [signsLearned, setSignsLearned] = useState(0);
+  const [quizzesTaken, setQuizzesTaken] = useState(0);
+  const [timeSpent, setTimeSpent] = useState(0);
   const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Stable ref so fire-and-forget persist calls always use the latest email
+  const emailRef = useRef('');
+  useEffect(() => { emailRef.current = userEmail; }, [userEmail]);
 
   // Derived gamification values
   const userLevel = Math.floor(userXP / 100) + 1;
   const xpToNextLevel = userXP % 100;
   const userLeague = getLeague(userXP);
 
-  // ── Load everything from AsyncStorage on mount ──
+  // ── Load everything from AsyncStorage, then reconcile with backend ──
   const loadAll = useCallback(async () => {
     try {
-      const [userRaw, progressRaw, streakRaw, weakRaw] = await Promise.all([
-        AsyncStorage.getItem('userData'),
-        AsyncStorage.getItem('lessonProgress'),
-        AsyncStorage.getItem('dayStreak'),
-        AsyncStorage.getItem(WEAK_SIGNS_KEY),
+      const userRaw = await AsyncStorage.getItem('userData');
+
+      if (!userRaw) {
+        // No user logged in – reset to defaults
+        setUserXP(0);
+        setUserName('');
+        setUserEmail('');
+        emailRef.current = '';
+        setCompletedLessonIds([]);
+        setStreak(0);
+        setWeakSigns([]);
+        setSignsLearned(0);
+        setQuizzesTaken(0);
+        setTimeSpent(0);
+        return;
+      }
+
+      const parsed = JSON.parse(userRaw);
+      const email = parsed.email || '';
+      setUserEmail(email);
+      emailRef.current = email;
+      setUserName(parsed.full_name || '');
+
+      if (!email) {
+        // No email available – use server XP, empty progress
+        setUserXP(parsed.xp || 0);
+        setCompletedLessonIds([]);
+        setStreak(0);
+        setWeakSigns([]);
+        setSignsLearned(0);
+        setQuizzesTaken(0);
+        setTimeSpent(0);
+        return;
+      }
+
+      // ── Step 1: Load local cache so the UI is populated instantly ──
+      const [xpRaw, progressRaw, streakRaw, weakRaw, signsRaw, quizzesRaw, timeRaw] = await Promise.all([
+        AsyncStorage.getItem(userKey(email, 'userXP')),
+        AsyncStorage.getItem(userKey(email, 'lessonProgress')),
+        AsyncStorage.getItem(userKey(email, 'dayStreak')),
+        AsyncStorage.getItem(userKey(email, 'weakSigns')),
+        AsyncStorage.getItem(userKey(email, 'signsLearned')),
+        AsyncStorage.getItem(userKey(email, 'quizzesAttempted')),
+        AsyncStorage.getItem(userKey(email, 'timeSpentMinutes')),
       ]);
 
-      if (userRaw) {
-        const parsed = JSON.parse(userRaw);
-        setUserXP(parsed.xp || 0);
-        setUserName(parsed.full_name || '');
+      // Resolve local values
+      const localXP = xpRaw != null ? Number(xpRaw) : (parsed.xp || 0);
+      const localLessons: number[] = progressRaw ? JSON.parse(progressRaw) : (parsed.completed_lessons || []);
+      const localStreak = Number(streakRaw || '0') || (parsed.streak || 0);
+      const localWeakSigns: WeakSign[] = weakRaw ? JSON.parse(weakRaw) : [];
+
+      let localSignsLearned = parsed.signs_learned || 0;
+      if (signsRaw != null) {
+        try {
+          const arr = JSON.parse(signsRaw);
+          localSignsLearned = Array.isArray(arr) ? arr.length : localSignsLearned;
+        } catch { /* keep fallback */ }
       }
-      setCompletedLessonIds(progressRaw ? JSON.parse(progressRaw) : []);
-      setStreak(Number(streakRaw || '0'));
-      setWeakSigns(weakRaw ? JSON.parse(weakRaw) : []);
+
+      const localQuizzes = quizzesRaw != null ? Number(quizzesRaw) : (parsed.quizzes_taken || 0);
+      const localTime = timeRaw != null ? Number(timeRaw) : (parsed.time_spent || 0);
+
+      // Paint the UI with cached data immediately
+      setUserXP(localXP);
+      setCompletedLessonIds(localLessons);
+      setStreak(localStreak);
+      setWeakSigns(localWeakSigns);
+      setSignsLearned(localSignsLearned);
+      setQuizzesTaken(localQuizzes);
+      setTimeSpent(localTime);
+
+      // ── Step 2: Pull server-authoritative data and overwrite cache ──
+      // This ensures that any admin edits (or progress recorded on another
+      // device) win over the stale local copy.
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          const { data: remote } = await axios.get(
+            `${API_URL}/api/user-progress`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+
+          const remoteXP: number = remote.xp ?? localXP;
+          const remoteLessons: number[] = remote.completed_lessons ?? localLessons;
+          const remoteStreak: number = remote.streak ?? localStreak;
+          const remoteSignsLearned: number = remote.signs_learned ?? localSignsLearned;
+          const remoteQuizzes: number = remote.quizzes_taken ?? localQuizzes;
+          const remoteTime: number = remote.time_spent ?? localTime;
+
+          // Overwrite React state with the server truth
+          setUserXP(remoteXP);
+          setCompletedLessonIds(remoteLessons);
+          setStreak(remoteStreak);
+          setSignsLearned(remoteSignsLearned);
+          setQuizzesTaken(remoteQuizzes);
+          setTimeSpent(remoteTime);
+          // weakSigns: the backend stores only a count, not the rich WeakSign
+          // objects, so we intentionally keep the local value here.
+
+          // Update AsyncStorage so the next cold-start reflects server data
+          await Promise.all([
+            AsyncStorage.setItem(userKey(email, 'userXP'), String(remoteXP)),
+            AsyncStorage.setItem(userKey(email, 'lessonProgress'), JSON.stringify(remoteLessons)),
+            AsyncStorage.setItem(userKey(email, 'dayStreak'), String(remoteStreak)),
+            AsyncStorage.setItem(userKey(email, 'quizzesAttempted'), String(remoteQuizzes)),
+            AsyncStorage.setItem(userKey(email, 'timeSpentMinutes'), String(remoteTime)),
+          ]);
+
+          console.log(
+            `[UserContext] synced from backend – xp=${remoteXP}  streak=${remoteStreak}  lessons=${remoteLessons.length}`,
+          );
+        }
+      } catch (fetchErr) {
+        // Network offline or token invalid – silently keep the local cache.
+        console.warn('[UserContext] backend pull failed, using local cache', fetchErr);
+      }
     } catch (e) {
       console.error('[UserContext] load error', e);
     } finally {
@@ -152,13 +278,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     loadAll();
   }, [loadAll]);
 
-  // ── Helper: persist XP into the userData JSON blob ──
+  // ── Helper: persist XP to the user-namespaced key ──
   const persistXP = useCallback(async (newXP: number) => {
     try {
-      const raw = await AsyncStorage.getItem('userData');
-      const data = raw ? JSON.parse(raw) : {};
-      data.xp = newXP;
-      await AsyncStorage.setItem('userData', JSON.stringify(data));
+      const email = emailRef.current;
+      if (!email) return;
+      await AsyncStorage.setItem(userKey(email, 'userXP'), String(newXP));
     } catch (e) {
       console.error('[UserContext] persistXP error', e);
     }
@@ -169,9 +294,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const xpRef = useRef(userXP);
   const streakRef = useRef(streak);
   const weakSignsRef = useRef(weakSigns);
+  const completedRef = useRef(completedLessonIds);
+  const signsLearnedRef = useRef(signsLearned);
+  const quizzesTakenRef = useRef(quizzesTaken);
+  const timeSpentRef = useRef(timeSpent);
   useEffect(() => { xpRef.current = userXP; }, [userXP]);
   useEffect(() => { streakRef.current = streak; }, [streak]);
   useEffect(() => { weakSignsRef.current = weakSigns; }, [weakSigns]);
+  useEffect(() => { completedRef.current = completedLessonIds; }, [completedLessonIds]);
+  useEffect(() => { signsLearnedRef.current = signsLearned; }, [signsLearned]);
+  useEffect(() => { quizzesTakenRef.current = quizzesTaken; }, [quizzesTaken]);
+  useEffect(() => { timeSpentRef.current = timeSpent; }, [timeSpent]);
 
   // ── syncProgressToBackend ──
   // Reads from refs (not closure state) so the debounced timer
@@ -193,6 +326,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           {
             streak: streakRef.current,
             weak_signs_count: weakSignsRef.current.length,
+            completed_lessons: completedRef.current,
+            signs_learned: signsLearnedRef.current,
+            quizzes_taken: quizzesTakenRef.current,
+            time_spent: timeSpentRef.current,
           },
           { headers: { Authorization: `Bearer ${token}` } },
         );
@@ -230,7 +367,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       setCompletedLessonIds((prev) => {
         if (prev.includes(lessonId)) return prev;
         const updated = [...prev, lessonId];
-        AsyncStorage.setItem('lessonProgress', JSON.stringify(updated)).catch(() => {});
+        const email = emailRef.current;
+        if (email) {
+          AsyncStorage.setItem(userKey(email, 'lessonProgress'), JSON.stringify(updated)).catch(() => {});
+        }
         return updated;
       });
 
@@ -297,7 +437,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const resolveWeakSign = useCallback(async (sign: string) => {
     setWeakSigns((prev) => {
       const updated = prev.filter((s) => s.sign !== sign);
-      AsyncStorage.setItem(WEAK_SIGNS_KEY, JSON.stringify(updated)).catch(() => {});
+      const email = emailRef.current;
+      if (email) {
+        AsyncStorage.setItem(userKey(email, 'weakSigns'), JSON.stringify(updated)).catch(() => {});
+      }
       return updated;
     });
   }, []);
@@ -313,7 +456,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         lastSeen: new Date().toISOString(),
       };
       const updated = [...prev, entry];
-      AsyncStorage.setItem(WEAK_SIGNS_KEY, JSON.stringify(updated)).catch(() => {});
+      const email = emailRef.current;
+      if (email) {
+        AsyncStorage.setItem(userKey(email, 'weakSigns'), JSON.stringify(updated)).catch(() => {});
+      }
       return updated;
     });
   }, []);
@@ -322,6 +468,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     await loadAll();
   }, [loadAll]);
+
+  // ── logout: wipe in-memory state, remove session keys ──
+  const logout = useCallback(async () => {
+    setUserXP(0);
+    setUserName('');
+    setUserEmail('');
+    emailRef.current = '';
+    setCompletedLessonIds([]);
+    setStreak(0);
+    setWeakSigns([]);
+    setSignsLearned(0);
+    setQuizzesTaken(0);
+    setTimeSpent(0);
+    await AsyncStorage.multiRemove(['userToken', 'userData']);
+  }, []);
 
   return (
     <UserContext.Provider
@@ -333,7 +494,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         completedLessonIds,
         streak,
         weakSigns,
+        signsLearned,
+        quizzesTaken,
+        timeSpent,
         userName,
+        userEmail,
         loading,
         completeLesson,
         addXP,
@@ -344,6 +509,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         syncProgressToBackend,
         sendHeartbeat,
         refresh,
+        logout,
       }}
     >
       {children}

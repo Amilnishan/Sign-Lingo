@@ -414,10 +414,8 @@
                         <th>User Details</th>
                         <th>Email</th>
                         <th>Total XP</th>
-                        <th>Streak</th>
                         <th>Status</th>
                         <th>Joined</th>
-                        <th></th>
                     </tr>
                 </thead>
                 <tbody id="usersTableBody">
@@ -487,17 +485,11 @@
                         <span class="xp-badge">⭐ ${user.xp || 0} XP</span>
                     </td>
                     <td>
-                        <span class="streak-badge">🔥 ${user.streak || 0} Days</span>
-                    </td>
-                    <td>
                         <span class="status-badge ${user.is_active ? 'status-online' : 'status-offline'}">
                             ${user.is_active ? 'Online' : 'Offline'}
                         </span>
                     </td>
                     <td>${formatDate(user.joined_at)}</td>
-                    <td>
-                        <button class="actions-btn">⋯</button>
-                    </td>
                 </tr>
             `).join('');
         }

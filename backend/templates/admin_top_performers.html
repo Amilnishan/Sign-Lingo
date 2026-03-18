@@ -540,7 +540,9 @@
                         <th>Rank</th>
                         <th>Student Name</th>
                         <th>Total XP</th>
+                        <th>Streak</th>
                         <th>Lessons</th>
+                        <th>Hours Spent</th>
                         <th>Quiz Accuracy</th>
                     </tr>
                 </thead>
@@ -604,16 +606,19 @@
         function renderLeaderboard(users) {
             const tbody = document.getElementById('leaderboardBody');
             const badges = ['🥇', '🥈', '🥉'];
-            const titles = ['Top Achiever', 'Consistent Learner', 'Rising Star'];
             
             if (users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #7f8c8d;">No users found for this period</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #7f8c8d;">No users found for this period</td></tr>';
                 return;
             }
             
             tbody.innerHTML = users.map((user, index) => {
                 const lessons = user.lessons_completed != null ? user.lessons_completed : 0;
+                const hours = user.hours_spent != null ? user.hours_spent : (lessons * 0.25);
+                const hoursDisplay = hours < 1 ? `${Math.round(hours * 60)}m` : `${hours.toFixed(1)}h`;
                 const accuracy = user.quiz_accuracy != null ? user.quiz_accuracy : null;
+                const streakVal = user.streak != null ? user.streak : 0;
+                const level = Math.floor((user.xp || 0) / 100) + 1;
                 const accuracyCell = accuracy != null
                     ? `<div style="display: flex; align-items: center; gap: 12px;">
                             <div class="progress-bar">
@@ -630,12 +635,14 @@
                             <div class="user-avatar-small">👤</div>
                             <div class="user-info">
                                 <div class="name">${user.full_name || 'Unknown'}</div>
-                                <div class="badge">${index < 3 ? titles[index] : ''}</div>
+                                <div class="badge" style="color: #2ECC71; font-size: 12px;">Level ${level}</div>
                             </div>
                         </div>
                     </td>
                     <td class="xp-cell">${user.xp || 0} XP</td>
+                    <td><span style="color:#e67e22; font-weight:600;">🔥 ${streakVal}d</span></td>
                     <td>${lessons}</td>
+                    <td>${hoursDisplay}</td>
                     <td>${accuracyCell}</td>
                 </tr>`;
             }).join('');

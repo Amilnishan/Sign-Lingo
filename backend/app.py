@@ -120,6 +120,10 @@ def register():
         "role": "user",  # Default role
         "xp": 0,
         "streak": 0,
+        "completed_lessons": [],
+        "signs_learned": 0,
+        "quizzes_taken": 0,
+        "time_spent": 0,
         "joined_at": datetime.datetime.utcnow()
     }
     
@@ -158,7 +162,11 @@ def login():
                 "full_name": user['full_name'],
                 "email": user['email'],
                 "xp": user['xp'],
-                "streak": user.get('streak', 0)
+                "streak": user.get('streak', 0),
+                "completed_lessons": user.get('completed_lessons', []),
+                "signs_learned": user.get('signs_learned', 0),
+                "quizzes_taken": user.get('quizzes_taken', 0),
+                "time_spent": user.get('time_spent', 0)
             }
         }), 200
     
@@ -329,6 +337,14 @@ def sync_progress():
             update_fields['streak'] = data['streak']
         if 'weak_signs_count' in data:
             update_fields['weak_signs_count'] = data['weak_signs_count']
+        if 'completed_lessons' in data and isinstance(data['completed_lessons'], list):
+            update_fields['completed_lessons'] = data['completed_lessons']
+        if 'signs_learned' in data:
+            update_fields['signs_learned'] = int(data['signs_learned'])
+        if 'quizzes_taken' in data:
+            update_fields['quizzes_taken'] = int(data['quizzes_taken'])
+        if 'time_spent' in data:
+            update_fields['time_spent'] = int(data['time_spent'])
 
         mongo.db.users.update_one(
             {'_id': ObjectId(user_id)},
@@ -415,6 +431,67 @@ def heartbeat():
         return jsonify({"message": "Token expired"}), 401
     except jwt.InvalidTokenError:
         print('[HEARTBEAT] Invalid token')
+        return jsonify({"message": "Invalid token"}), 401
+
+
+@app.route('/api/user-progress', methods=['GET'])
+def get_user_progress_sync():
+    """Return server-authoritative progress for the authenticated user.
+
+    Called by the mobile app immediately after login / context initialisation
+    so the device always starts with the canonical backend values before any
+    local AsyncStorage data can overwrite them.
+
+    Response JSON:
+        xp              – total experience points
+        streak          – current day streak
+        completed_lessons – list of completed lesson IDs
+        signs_learned   – count of unique signs learned
+        quizzes_taken   – total quizzes completed
+        time_spent      – total time spent in minutes
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        print('[USER-PROGRESS] No auth header')
+        return jsonify({"message": "Unauthorized"}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        user_id = payload.get('user_id')
+
+        from bson.objectid import ObjectId
+        user = mongo.db.users.find_one(
+            {'_id': ObjectId(user_id)},
+            {
+                'xp': 1,
+                'streak': 1,
+                'completed_lessons': 1,
+                'signs_learned': 1,
+                'quizzes_taken': 1,
+                'time_spent': 1,
+            }
+        )
+
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+
+        print(f"[USER-PROGRESS] user={user_id}  xp={user.get('xp', 0)}  streak={user.get('streak', 0)}")
+        return jsonify({
+            "xp": user.get('xp', 0),
+            "streak": user.get('streak', 0),
+            "completed_lessons": user.get('completed_lessons', []),
+            "signs_learned": user.get('signs_learned', 0),
+            "quizzes_taken": user.get('quizzes_taken', 0),
+            "time_spent": user.get('time_spent', 0),
+        }), 200
+
+    except jwt.ExpiredSignatureError:
+        print('[USER-PROGRESS] Token expired')
+        return jsonify({"message": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        print('[USER-PROGRESS] Invalid token')
         return jsonify({"message": "Invalid token"}), 401
 
 
@@ -570,6 +647,53 @@ def admin_stats():
     except jwt.InvalidTokenError:
         return jsonify({"message": "Invalid token"}), 401
 
+# 7b. ADMIN USER-GROWTH DATA (for dashboard line chart)
+@app.route('/admin/api/user-growth')
+def admin_user_growth():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"message": "Unauthorized"}), 401
+
+    token = auth_header.split(' ')[1]
+
+    try:
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        if payload.get('role') != 'admin':
+            return jsonify({"message": "Admin access required"}), 403
+
+        users = mongo.db.users
+        now = datetime.datetime.utcnow()
+
+        # Build 4-week buckets (most recent week first, then reverse for chronological order)
+        weeks = []
+        for i in range(4):
+            end = now - datetime.timedelta(weeks=i)
+            start = now - datetime.timedelta(weeks=i + 1)
+            new_count = users.count_documents({
+                'role': 'user',
+                'joined_at': {'$gte': start, '$lt': end}
+            })
+            five_min_ago = end - datetime.timedelta(minutes=5)
+            returning_count = users.count_documents({
+                'role': 'user',
+                'joined_at': {'$lt': start},
+                'last_active': {'$gte': start, '$lt': end}
+            })
+            weeks.append({
+                'label': f"Week {4 - i}",
+                'new_users': new_count,
+                'returning_users': returning_count
+            })
+
+        weeks.reverse()  # chronological order
+
+        return jsonify({"weeks": weeks}), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({"message": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"message": "Invalid token"}), 401
+
 # 8. GET ALL USERS (Admin only)
 @app.route('/admin/api/users')
 def get_all_users():
@@ -611,6 +735,10 @@ def get_all_users():
             user['_id'] = str(user['_id'])
             last_active = user.get('last_active')
             user['is_active'] = bool(last_active and last_active >= five_min_ago)
+            # Compute lessons_completed count and hours_spent estimate
+            completed = user.get('completed_lessons', [])
+            user['lessons_completed'] = len(completed) if isinstance(completed, list) else 0
+            user['hours_spent'] = round(user['lessons_completed'] * 0.25, 1)
             if 'joined_at' in user:
                 user['joined_at'] = user['joined_at'].isoformat()
             if 'last_active' in user and hasattr(user['last_active'], 'isoformat'):

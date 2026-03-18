@@ -91,6 +91,8 @@ export default function QuizScreen() {
     syncXPFromServer,
     updateStreak: ctxUpdateStreak,
     syncProgressToBackend,
+    refresh: ctxRefresh,
+    userEmail,
   } = useUser();
 
   const [quizData, setQuizData] = useState<QuizData | null>(null);
@@ -216,7 +218,7 @@ export default function QuizScreen() {
         setCameraError(false);
         setCameraFeedback(`${sign.replace('_', ' ')} - Correct!`);
         // Record correct attempt (may graduate a weak sign)
-        recordSignAttempt(targetSign, true).catch(() => {});
+        recordSignAttempt(userEmail, targetSign, true).catch(() => {});
         handleCameraCorrect(targetSign);
       }
       // ── Scenario B — HARD ERROR (confident wrong sign → RED) ──
@@ -224,7 +226,7 @@ export default function QuizScreen() {
         setCameraError(true);
         setCameraFeedback(`Incorrect: That looks like ${sign.replace('_', ' ')}`);
         // Record wrong attempt → adds to weak signs
-        recordSignAttempt(targetSign, false).catch(() => {});
+        recordSignAttempt(userEmail, targetSign, false).catch(() => {});
         // Throttle sound + haptic so they don't spam
         if (!wrongSoundCooldownRef.current) {
           wrongSoundCooldownRef.current = true;
@@ -417,31 +419,33 @@ export default function QuizScreen() {
       }
 
       // --- Track all stats locally ---
+      // Helper to build user-namespaced storage keys
+      const uk = (key: string) => `${userEmail}_${key}`;
 
       // 1. Quizzes attempted
-      const quizCount = Number(await AsyncStorage.getItem('quizzesAttempted') || '0') + 1;
-      await AsyncStorage.setItem('quizzesAttempted', String(quizCount));
+      const quizCount = Number(await AsyncStorage.getItem(uk('quizzesAttempted')) || '0') + 1;
+      await AsyncStorage.setItem(uk('quizzesAttempted'), String(quizCount));
 
       // 2. Accuracy: store total correct & total questions, compute average
-      const prevCorrect = Number(await AsyncStorage.getItem('totalCorrectAnswers') || '0');
-      const prevTotal = Number(await AsyncStorage.getItem('totalQuestionsAnswered') || '0');
-      await AsyncStorage.setItem('totalCorrectAnswers', String(prevCorrect + score));
-      await AsyncStorage.setItem('totalQuestionsAnswered', String(prevTotal + quizData!.questions.length));
+      const prevCorrect = Number(await AsyncStorage.getItem(uk('totalCorrectAnswers')) || '0');
+      const prevTotal = Number(await AsyncStorage.getItem(uk('totalQuestionsAnswered')) || '0');
+      await AsyncStorage.setItem(uk('totalCorrectAnswers'), String(prevCorrect + score));
+      await AsyncStorage.setItem(uk('totalQuestionsAnswered'), String(prevTotal + quizData!.questions.length));
 
       // 3. Signs learned: count unique words from completed lessons
-      const signsData = await AsyncStorage.getItem('signsLearned');
+      const signsData = await AsyncStorage.getItem(uk('signsLearned'));
       const signsSet: string[] = signsData ? JSON.parse(signsData) : [];
       const params_words = (params.words as string) || '[]';
       try {
         const lessonWords: string[] = JSON.parse(params_words);
         lessonWords.forEach(w => { if (!signsSet.includes(w)) signsSet.push(w); });
       } catch { /* ignore parse error */ }
-      await AsyncStorage.setItem('signsLearned', JSON.stringify(signsSet));
+      await AsyncStorage.setItem(uk('signsLearned'), JSON.stringify(signsSet));
 
       // 4. Weekly XP: store XP earned per day-of-week (Mon=0..Sun=6)
-      const weeklyData = await AsyncStorage.getItem('weeklyXP');
+      const weeklyData = await AsyncStorage.getItem(uk('weeklyXP'));
       const weekly: number[] = weeklyData ? JSON.parse(weeklyData) : [0, 0, 0, 0, 0, 0, 0];
-      const weeklyDate = await AsyncStorage.getItem('weeklyXPDate');
+      const weeklyDate = await AsyncStorage.getItem(uk('weeklyXPDate'));
       const today = new Date();
       const todayStr = today.toDateString();
       // Reset weekly data if it's a new week (Monday reset)
@@ -454,12 +458,12 @@ export default function QuizScreen() {
       }
       const dayIndex = (today.getDay() + 6) % 7; // Mon=0, Sun=6
       weekly[dayIndex] += score * XP_PER_QUESTION;
-      await AsyncStorage.setItem('weeklyXP', JSON.stringify(weekly));
-      await AsyncStorage.setItem('weeklyXPDate', todayStr);
+      await AsyncStorage.setItem(uk('weeklyXP'), JSON.stringify(weekly));
+      await AsyncStorage.setItem(uk('weeklyXPDate'), todayStr);
 
       // 5. Day streak
-      const lastActiveDate = await AsyncStorage.getItem('lastActiveDate');
-      let streak = Number(await AsyncStorage.getItem('dayStreak') || '0');
+      const lastActiveDate = await AsyncStorage.getItem(uk('lastActiveDate'));
+      let streak = Number(await AsyncStorage.getItem(uk('dayStreak')) || '0');
       if (lastActiveDate) {
         const last = new Date(lastActiveDate);
         const diffDays = Math.floor((today.getTime() - last.getTime()) / 86400000);
@@ -473,8 +477,8 @@ export default function QuizScreen() {
       } else {
         streak = 1; // First time
       }
-      await AsyncStorage.setItem('dayStreak', String(streak));
-      await AsyncStorage.setItem('lastActiveDate', todayStr);
+      await AsyncStorage.setItem(uk('dayStreak'), String(streak));
+      await AsyncStorage.setItem(uk('lastActiveDate'), todayStr);
       ctxUpdateStreak(streak);
 
       // Trigger another sync so the updated streak reaches the server
@@ -482,13 +486,13 @@ export default function QuizScreen() {
       setTimeout(() => syncProgressToBackend(), 500);
 
       // 6. Lessons completed count
-      const lessonsCount = Number(await AsyncStorage.getItem('lessonsCompletedCount') || '0') + 1;
-      await AsyncStorage.setItem('lessonsCompletedCount', String(lessonsCount));
+      const lessonsCount = Number(await AsyncStorage.getItem(uk('lessonsCompletedCount')) || '0') + 1;
+      await AsyncStorage.setItem(uk('lessonsCompletedCount'), String(lessonsCount));
 
       // 7. Time spent (in minutes)
       const timeElapsed = Math.round((Date.now() - lessonStartTime.current) / 60000);
-      const prevTime = Number(await AsyncStorage.getItem('timeSpentMinutes') || '0');
-      await AsyncStorage.setItem('timeSpentMinutes', String(prevTime + Math.max(timeElapsed, 1)));
+      const prevTime = Number(await AsyncStorage.getItem(uk('timeSpentMinutes')) || '0');
+      await AsyncStorage.setItem(uk('timeSpentMinutes'), String(prevTime + Math.max(timeElapsed, 1)));
 
       // ── 8. Update Daily Quest progress ──
       const earnedXpForQuest = score * XP_PER_QUESTION;
@@ -501,6 +505,9 @@ export default function QuizScreen() {
         const words: string[] = JSON.parse(pw);
         if (words.length > 0) updateQuestProgress('sign', words.length);
       } catch { /* ignore */ }
+
+      // 9. Refresh UserContext so all screens see updated stats immediately
+      await ctxRefresh();
 
     } catch (err) {
       console.error('Error completing lesson:', err);

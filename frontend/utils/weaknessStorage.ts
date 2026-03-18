@@ -1,7 +1,8 @@
 // frontend/utils/weaknessStorage.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const WEAK_SIGNS_KEY = 'weakSigns';
+/** Build the user-namespaced weak-signs key */
+const weakKey = (userEmail: string) => `${userEmail}_weakSigns`;
 
 export interface WeakSign {
   sign: string;
@@ -13,9 +14,9 @@ export interface WeakSign {
 /**
  * Returns the full list of weak signs (accuracy < threshold).
  */
-export async function getWeakSigns(): Promise<WeakSign[]> {
+export async function getWeakSigns(userEmail: string): Promise<WeakSign[]> {
   try {
-    const raw = await AsyncStorage.getItem(WEAK_SIGNS_KEY);
+    const raw = await AsyncStorage.getItem(weakKey(userEmail));
     if (!raw) return [];
     return JSON.parse(raw) as WeakSign[];
   } catch {
@@ -26,8 +27,8 @@ export async function getWeakSigns(): Promise<WeakSign[]> {
 /**
  * Save / overwrite the weak-signs list.
  */
-export async function saveWeakSigns(signs: WeakSign[]): Promise<void> {
-  await AsyncStorage.setItem(WEAK_SIGNS_KEY, JSON.stringify(signs));
+export async function saveWeakSigns(userEmail: string, signs: WeakSign[]): Promise<void> {
+  await AsyncStorage.setItem(weakKey(userEmail), JSON.stringify(signs));
 }
 
 /**
@@ -35,10 +36,11 @@ export async function saveWeakSigns(signs: WeakSign[]): Promise<void> {
  * kept / added to the weak list; once it exceeds 70 % the sign is removed.
  */
 export async function recordSignAttempt(
+  userEmail: string,
   sign: string,
   wasCorrect: boolean,
 ): Promise<void> {
-  const list = await getWeakSigns();
+  const list = await getWeakSigns(userEmail);
   const idx = list.findIndex(s => s.sign === sign);
 
   if (idx >= 0) {
@@ -63,12 +65,12 @@ export async function recordSignAttempt(
     });
   }
 
-  await saveWeakSigns(list);
+  await saveWeakSigns(userEmail, list);
 }
 
 /**
  * Convenience: just the count of weak signs.
  */
-export async function getWeakSignCount(): Promise<number> {
-  return (await getWeakSigns()).length;
+export async function getWeakSignCount(userEmail: string): Promise<number> {
+  return (await getWeakSigns(userEmail)).length;
 }

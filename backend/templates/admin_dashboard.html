@@ -266,34 +266,14 @@
         .legend-dot.green { background: #2ECC71; }
         .legend-dot.gray { background: #bdc3c7; }
 
-        .chart-placeholder {
-            height: 250px;
-            background: linear-gradient(to top, #e8f8f0 0%, transparent 100%);
-            border-radius: 12px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-around;
-            padding: 20px;
-        }
-
-        .chart-bar {
-            width: 60px;
-            background: linear-gradient(to top, #2ECC71, #27AE60);
-            border-radius: 8px 8px 0 0;
+        .chart-canvas-wrapper {
             position: relative;
+            height: 280px;
         }
 
-        .chart-bar:nth-child(1) { height: 40%; }
-        .chart-bar:nth-child(2) { height: 55%; }
-        .chart-bar:nth-child(3) { height: 70%; }
-        .chart-bar:nth-child(4) { height: 85%; }
-
-        .chart-labels {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 12px;
-            color: #7f8c8d;
-            font-size: 13px;
+        .chart-canvas-wrapper canvas {
+            width: 100%;
+            height: 100%;
         }
 
         /* Responsive */
@@ -425,17 +405,8 @@
                     </div>
                 </div>
             </div>
-            <div class="chart-placeholder">
-                <div class="chart-bar"></div>
-                <div class="chart-bar"></div>
-                <div class="chart-bar"></div>
-                <div class="chart-bar"></div>
-            </div>
-            <div class="chart-labels">
-                <span>Week 1</span>
-                <span>Week 2</span>
-                <span>Week 3</span>
-                <span>Week 4</span>
+            <div class="chart-canvas-wrapper">
+                <canvas id="growthChart"></canvas>
             </div>
         </div>
     </main>
@@ -471,6 +442,115 @@
             }
         }
 
+        // ---- Grouped Bar Chart ----
+        async function fetchGrowthChart() {
+            try {
+                const response = await fetch('/admin/api/user-growth', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                drawBarChart(data.weeks || []);
+            } catch (e) {
+                console.error('Growth chart error:', e);
+            }
+        }
+
+        function drawBarChart(weeks) {
+            const canvas = document.getElementById('growthChart');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            const W = rect.width;
+            const H = rect.height;
+
+            ctx.clearRect(0, 0, W, H);
+            if (!weeks.length) return;
+
+            const newData = weeks.map(w => w.new_users);
+            const retData = weeks.map(w => w.returning_users);
+            const labels = weeks.map(w => w.label);
+            const maxVal = Math.max(...newData, ...retData, 1);
+
+            const padL = 50, padR = 20, padT = 30, padB = 50;
+            const chartW = W - padL - padR;
+            const chartH = H - padT - padB;
+            const n = weeks.length;
+
+            // Horizontal grid lines + Y axis labels
+            const steps = Math.min(maxVal, 5);
+            ctx.font = `${12 * dpr / dpr}px Inter, sans-serif`;
+            for (let i = 0; i <= steps; i++) {
+                const val = Math.round(maxVal / steps * i);
+                const y = padT + chartH - (val / maxVal) * chartH;
+                ctx.beginPath();
+                ctx.strokeStyle = '#eef0f2';
+                ctx.lineWidth = 1;
+                ctx.moveTo(padL, y);
+                ctx.lineTo(padL + chartW, y);
+                ctx.stroke();
+                ctx.fillStyle = '#95a5a6';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(val, padL - 8, y);
+            }
+
+            // Draw grouped bars
+            const groupW = chartW / n;
+            const barPad = groupW * 0.15;
+            const barW = (groupW - barPad * 2) / 2 - 3;
+            const GREEN = '#2ECC71';
+            const GRAY = '#bdc3c7';
+            const GREEN_LIGHT = '#a8f0c8';
+            const GRAY_LIGHT = '#e8ecee';
+
+            weeks.forEach((week, i) => {
+                const groupX = padL + i * groupW + barPad;
+                const x1 = groupX;           // New users bar
+                const x2 = groupX + barW + 3; // Returning bar
+
+                function drawBar(x, value, color, lightColor) {
+                    const barH = (value / maxVal) * chartH;
+                    const y = padT + chartH - barH;
+
+                    // Shadow / base
+                    ctx.fillStyle = lightColor;
+                    ctx.beginPath();
+                    ctx.roundRect(x, padT, barW, chartH, 4);
+                    ctx.fill();
+
+                    // Actual bar
+                    if (value > 0) {
+                        ctx.fillStyle = color;
+                        ctx.beginPath();
+                        ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]);
+                        ctx.fill();
+
+                        // Value label on top
+                        ctx.fillStyle = color;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.font = 'bold 13px Inter, sans-serif';
+                        ctx.fillText(value, x + barW / 2, y - 4);
+                    }
+                }
+
+                drawBar(x1, week.new_users, GREEN, GREEN_LIGHT);
+                drawBar(x2, week.returning_users, GRAY, GRAY_LIGHT);
+
+                // X axis label
+                const labelX = groupX + barW + 1.5;
+                ctx.fillStyle = '#5f6368';
+                ctx.font = '12px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillText(week.label, labelX, padT + chartH + 10);
+            });
+        }
+
         // Logout function
         function logout() {
             localStorage.removeItem('adminToken');
@@ -481,11 +561,16 @@
         // Filter change handler
         document.getElementById('periodFilter').addEventListener('change', fetchStats);
 
-        // Load stats on page load
+        // Load stats & chart on page load
         fetchStats();
+        fetchGrowthChart();
 
         // Auto-refresh every 30 seconds so stats stay current
         setInterval(fetchStats, 30000);
+        setInterval(fetchGrowthChart, 30000);
+
+        // Redraw chart on resize
+        window.addEventListener('resize', fetchGrowthChart);
     </script>
 </body>
 </html>

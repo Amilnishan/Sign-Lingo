@@ -21,6 +21,7 @@ import { Fonts } from '@/constants/fonts';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { API_URL } from '@/constants/config';
 import CustomSwitch from '@/components/custom-switch';
+import { useUser } from '@/contexts/UserContext';
 
 const { width } = Dimensions.get('window');
 
@@ -124,6 +125,7 @@ const Divider: React.FC = () => <View style={styles.divider} />;
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { logout } = useUser();
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
@@ -336,8 +338,7 @@ export default function SettingsScreen() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('userToken');
-            await AsyncStorage.removeItem('userData');
+            await logout();
             router.replace('/login');
           },
         },

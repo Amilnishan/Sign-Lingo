@@ -355,7 +355,12 @@ export default function HomeScreen() {
       <BlurView intensity={80} tint="dark" style={styles.stickyHeader}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>
+            <Text
+              style={styles.greeting}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
               {userName ? `Hi, ${userName.split(' ')[0]}!` : 'Welcome!'}
             </Text>
             <Text style={styles.subGreeting}>Continue your journey</Text>
@@ -580,7 +585,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  headerLeft: {},
+  headerLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
   greeting: {
     fontSize: 26,
     ...Fonts.appName,
@@ -594,15 +602,16 @@ const styles = StyleSheet.create({
   },
   headerStats: {
     flexDirection: 'row',
-    gap: 10,
+    flexShrink: 0,
+    gap: 8,
   },
   statPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: 'rgba(30, 41, 59, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.cardBorder,

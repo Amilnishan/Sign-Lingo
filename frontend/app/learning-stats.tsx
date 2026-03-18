@@ -1,5 +1,5 @@
 // frontend/app/learning-stats.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -122,7 +123,7 @@ const CircularProgress = ({ percentage, size, color }: { percentage: number, siz
 
 export default function LearningStatsScreen() {
   const router = useRouter();
-  const { userXP, userLevel, xpToNextLevel, completedLessonIds } = useUser();
+  const { userXP, userLevel, xpToNextLevel, completedLessonIds, userEmail } = useUser();
   const [stats, setStats] = useState<UserStats>({
     totalXP: 0,
     level: 1,
@@ -137,35 +138,38 @@ export default function LearningStatsScreen() {
   const [weeklyXP, setWeeklyXP] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (userEmail) loadStats();
+    }, [userEmail])
+  );
 
   const loadStats = async () => {
     try {
-      // Load user data (XP comes from server via userData)
-      const userData = await AsyncStorage.getItem('userData');
-      const parsed = userData ? JSON.parse(userData) : {};
-      const totalXP = parsed.xp || 0;
+      // Helper to build user-namespaced storage keys
+      const uk = (key: string) => `${userEmail}_${key}`;
 
-      // Load all locally tracked stats
-      const streak = Number(await AsyncStorage.getItem('dayStreak') || '0');
-      const lessonsCompleted = Number(await AsyncStorage.getItem('lessonsCompletedCount') || '0');
-      const quizzesTaken = Number(await AsyncStorage.getItem('quizzesAttempted') || '0');
-      const timeSpent = Number(await AsyncStorage.getItem('timeSpentMinutes') || '0');
+      // XP comes from context (server-authoritative)
+      const totalXP = userXP;
+
+      // Load all locally tracked stats (user-namespaced)
+      const streak = Number(await AsyncStorage.getItem(uk('dayStreak')) || '0');
+      const lessonsCompleted = Number(await AsyncStorage.getItem(uk('lessonsCompletedCount')) || '0');
+      const quizzesTaken = Number(await AsyncStorage.getItem(uk('quizzesAttempted')) || '0');
+      const timeSpent = Number(await AsyncStorage.getItem(uk('timeSpentMinutes')) || '0');
 
       // Accuracy: correct / total questions
-      const totalCorrect = Number(await AsyncStorage.getItem('totalCorrectAnswers') || '0');
-      const totalQuestions = Number(await AsyncStorage.getItem('totalQuestionsAnswered') || '0');
+      const totalCorrect = Number(await AsyncStorage.getItem(uk('totalCorrectAnswers')) || '0');
+      const totalQuestions = Number(await AsyncStorage.getItem(uk('totalQuestionsAnswered')) || '0');
       const averageAccuracy = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
 
       // Signs learned
-      const signsData = await AsyncStorage.getItem('signsLearned');
+      const signsData = await AsyncStorage.getItem(uk('signsLearned'));
       const signsArray: string[] = signsData ? JSON.parse(signsData) : [];
       const signsLearned = signsArray.length;
 
       // Weekly XP
-      const weeklyData = await AsyncStorage.getItem('weeklyXP');
+      const weeklyData = await AsyncStorage.getItem(uk('weeklyXP'));
       if (weeklyData) {
         setWeeklyXP(JSON.parse(weeklyData));
       }

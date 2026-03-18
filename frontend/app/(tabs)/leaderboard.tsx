@@ -1,13 +1,12 @@
 // frontend/app/(tabs)/leaderboard.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,9 +15,7 @@ import { API_URL } from '@/constants/config';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
-
-// Modern Glow Design System
+// ── Design tokens ──────────────────────────────────────────────
 const COLORS = {
   background: '#0F172A',
   cardBg: '#1E293B',
@@ -26,10 +23,14 @@ const COLORS = {
   textPrimary: '#FFFFFF',
   textSecondary: '#94A3B8',
   emerald: '#2ECC71',
+  emeraldDark: '#1FA855',
   teal: '#14B8A6',
   gold: '#FFD700',
-  silver: '#C0C0C0',
-  bronze: '#CD7F32',
+  goldDark: '#F59E0B',
+  silver: '#E2E8F0',
+  silverDark: '#94A3B8',
+  bronze: '#D97706',
+  bronzeDark: '#B45309',
 };
 
 interface Player {
@@ -40,6 +41,114 @@ interface Player {
   avatar?: string;
 }
 
+// ── Podium column component ────────────────────────────────────
+function PodiumColumn({
+  player,
+  rank,
+  avatarSize,
+  pedestalHeight,
+  gradientColors,
+  accentColor,
+}: {
+  player: Player | undefined;
+  rank: 1 | 2 | 3;
+  avatarSize: number;
+  pedestalHeight: number;
+  gradientColors: readonly [string, string, ...string[]];
+  accentColor: string;
+}) {
+  const badgeSize = rank === 1 ? 28 : 24;
+  const initial = player?.full_name?.charAt(0)?.toUpperCase() || '?';
+
+  return (
+    <View style={styles.podiumColumn}>
+      {/* Trophy for 1st */}
+      {rank === 1 && (
+        <Ionicons
+          name="trophy"
+          size={30}
+          color={COLORS.gold}
+          style={{ marginBottom: 6 }}
+        />
+      )}
+
+      {/* Avatar — sits directly above the pedestal */}
+      <View
+        style={[
+          styles.podiumAvatar,
+          {
+            width: avatarSize,
+            height: avatarSize,
+            borderRadius: avatarSize / 2,
+            borderColor: accentColor,
+            shadowColor: accentColor,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.podiumAvatarText,
+            { fontSize: rank === 1 ? 34 : 24 },
+          ]}
+        >
+          {initial}
+        </Text>
+      </View>
+
+      {/* Rank badge — overlaps bottom-center of avatar */}
+      <View
+        style={[
+          styles.rankBadge,
+          {
+            width: badgeSize,
+            height: badgeSize,
+            borderRadius: badgeSize / 2,
+            backgroundColor: accentColor,
+            marginTop: -(badgeSize / 2),
+            zIndex: 5,
+          },
+        ]}
+      >
+        <Text style={styles.rankBadgeText}>{rank}</Text>
+      </View>
+
+      {/* Solid gradient pedestal */}
+      <LinearGradient
+        colors={gradientColors}
+        style={[
+          styles.pedestal,
+          {
+            height: pedestalHeight,
+            width: rank === 1 ? 100 : 86,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.pedestalName,
+            rank === 1 && { fontSize: 15 },
+          ]}
+          numberOfLines={1}
+        >
+          {player?.full_name || `Player ${rank}`}
+        </Text>
+        <View style={styles.pedestalXpRow}>
+          <Ionicons name="flash" size={rank === 1 ? 14 : 12} color="#FFF" />
+          <Text
+            style={[
+              styles.pedestalXpText,
+              rank === 1 && { fontSize: 16 },
+            ]}
+          >
+            {player?.xp ?? 0}
+          </Text>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
+
+// ── Main screen ────────────────────────────────────────────────
 export default function LeaderboardScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'week' | 'allTime'>('week');
@@ -52,7 +161,17 @@ export default function LeaderboardScreen() {
     loadCurrentUser();
   }, []);
 
-  // Re-fetch leaderboard every time the tab is focused (not just on mount)
+  // Recalculate rank whenever players list OR currentUserId changes.
+  // This fixes the first-load race condition where fetchLeaderboard runs
+  // before loadCurrentUser has finished setting currentUserId.
+  useEffect(() => {
+    if (!currentUserId || players.length === 0) return;
+    const rank = players.findIndex(
+      (p) => p._id === currentUserId || p.email === currentUserId,
+    );
+    setMyRank(rank >= 0 ? rank + 1 : null);
+  }, [players, currentUserId]);
+
   useFocusEffect(
     useCallback(() => {
       fetchLeaderboard();
@@ -75,14 +194,14 @@ export default function LeaderboardScreen() {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const response = await axios.get(`${API_URL}/leaderboard?period=${activeTab}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      
+      const response = await axios.get(
+        `${API_URL}/leaderboard?period=${activeTab}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+
       if (response.data && response.data.players) {
         setPlayers(response.data.players);
-        const rank = response.data.players.findIndex((p: Player) => p._id === currentUserId || p.email === currentUserId);
-        setMyRank(rank >= 0 ? rank + 1 : null);
+        // myRank is derived reactively by the useEffect above.
       }
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
@@ -101,35 +220,50 @@ export default function LeaderboardScreen() {
     }
   };
 
-  const getUsername = (player: Player) => {
-    return '@' + (player.full_name?.toLowerCase().replace(/\s+/g, '') || 'player');
-  };
+  const getUsername = (player: Player) =>
+    '@' + (player.full_name?.toLowerCase().replace(/\s+/g, '') || 'player');
 
   const topThree = players.slice(0, 3);
   const restPlayers = players.slice(3);
 
+  // ── Render ───────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header + Toggle */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Leaderboard</Text>
-        <View style={styles.tabSwitcher}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'week' && styles.tabActive]}
-            onPress={() => setActiveTab('week')}
-          >
-            <Text style={[styles.tabText, activeTab === 'week' && styles.tabTextActive]}>
-              Week
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'allTime' && styles.tabActive]}
-            onPress={() => setActiveTab('allTime')}
-          >
-            <Text style={[styles.tabText, activeTab === 'allTime' && styles.tabTextActive]}>
-              All Time
-            </Text>
-          </TouchableOpacity>
+
+        <View style={styles.toggleBar}>
+          {(['week', 'allTime'] as const).map((tab) => {
+            const active = activeTab === tab;
+            const label = tab === 'week' ? 'This Week' : 'All Time';
+            return active ? (
+              <LinearGradient
+                key={tab}
+                colors={[COLORS.emerald, COLORS.emeraldDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.togglePillActive}
+              >
+                <TouchableOpacity
+                  style={styles.togglePillInner}
+                  onPress={() => setActiveTab(tab)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.toggleTextActive}>{label}</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            ) : (
+              <TouchableOpacity
+                key={tab}
+                style={styles.togglePillInactive}
+                onPress={() => setActiveTab(tab)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.toggleTextInactive}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -140,108 +274,77 @@ export default function LeaderboardScreen() {
       ) : (
         <>
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Podium Section with Stage */}
-            <LinearGradient
-              colors={['rgba(46, 204, 113, 0.1)', 'transparent']}
-              style={styles.podiumStage}
-            >
-              <View style={styles.podiumContainer}>
-                {/* Second Place */}
-                <View style={styles.podiumPlayer}>
-                  <View style={[styles.podiumAvatar, styles.avatar2nd]}>
-                    <Text style={styles.podiumAvatarText}>
-                      {topThree[1]?.full_name?.charAt(0)?.toUpperCase() || '?'}
-                    </Text>
-                  </View>
-                  <View style={styles.rankBadge2nd}>
-                    <Text style={styles.rankNumber}>2</Text>
-                  </View>
-                  <Text style={styles.podiumName} numberOfLines={1}>
-                    {topThree[1]?.full_name || 'Player 2'}
-                  </Text>
-                  <View style={styles.xpPill}>
-                    <Ionicons name="flash" size={12} color={COLORS.silver} />
-                    <Text style={[styles.xpPillText, { color: COLORS.silver }]}>
-                      {topThree[1]?.xp || 0}
-                    </Text>
-                  </View>
-                  <View style={[styles.pedestal, styles.pedestal2nd]} />
-                </View>
+            {/* ── Podium ─────────────────────────────────── */}
+            <View style={styles.podiumSection}>
+              <View style={styles.podiumRow}>
+                {/* 2nd place — left */}
+                <PodiumColumn
+                  player={topThree[1]}
+                  rank={2}
+                  avatarSize={60}
+                  pedestalHeight={90}
+                  gradientColors={[COLORS.silver, COLORS.silverDark]}
+                  accentColor={COLORS.silver}
+                />
 
-                {/* First Place - Winner */}
-                <View style={[styles.podiumPlayer, styles.podiumWinner]}>
-                  <View style={styles.crownContainer}>
-                      <Ionicons name="trophy" size={32} color={COLORS.gold} />
-                    </View>
-                  <View style={[styles.podiumAvatar, styles.avatar1st]}>
-                    <Text style={[styles.podiumAvatarText, styles.winnerAvatarText]}>
-                      {topThree[0]?.full_name?.charAt(0)?.toUpperCase() || '?'}
-                    </Text>
-                  </View>
-                  <View style={styles.rankBadge1st}>
-                    <Text style={styles.rankNumber}>1</Text>
-                  </View>
-                  <Text style={[styles.podiumName, styles.winnerName]} numberOfLines={1}>
-                    {topThree[0]?.full_name || 'Player 1'}
-                  </Text>
-                  <View style={[styles.xpPill, styles.winnerXPPill]}>
-                    <Ionicons name="flash" size={14} color={COLORS.gold} />
-                    <Text style={[styles.xpPillText, { color: COLORS.gold, fontSize: 16 }]}>
-                      {topThree[0]?.xp || 0}
-                    </Text>
-                  </View>
-                  <View style={[styles.pedestal, styles.pedestal1st]} />
-                </View>
+                {/* 1st place — center, taller */}
+                <PodiumColumn
+                  player={topThree[0]}
+                  rank={1}
+                  avatarSize={80}
+                  pedestalHeight={120}
+                  gradientColors={[COLORS.gold, COLORS.goldDark]}
+                  accentColor={COLORS.gold}
+                />
 
-                {/* Third Place */}
-                <View style={styles.podiumPlayer}>
-                  <View style={[styles.podiumAvatar, styles.avatar3rd]}>
-                    <Text style={styles.podiumAvatarText}>
-                      {topThree[2]?.full_name?.charAt(0)?.toUpperCase() || '?'}
-                    </Text>
-                  </View>
-                  <View style={styles.rankBadge3rd}>
-                    <Text style={styles.rankNumber}>3</Text>
-                  </View>
-                  <Text style={styles.podiumName} numberOfLines={1}>
-                    {topThree[2]?.full_name || 'Player 3'}
-                  </Text>
-                  <View style={styles.xpPill}>
-                    <Ionicons name="flash" size={12} color={COLORS.bronze} />
-                    <Text style={[styles.xpPillText, { color: COLORS.bronze }]}>
-                      {topThree[2]?.xp || 0}
-                    </Text>
-                  </View>
-                  <View style={[styles.pedestal, styles.pedestal3rd]} />
-                </View>
+                {/* 3rd place — right */}
+                <PodiumColumn
+                  player={topThree[2]}
+                  rank={3}
+                  avatarSize={60}
+                  pedestalHeight={70}
+                  gradientColors={[COLORS.bronze, COLORS.bronzeDark]}
+                  accentColor={COLORS.bronze}
+                />
               </View>
-            </LinearGradient>
+            </View>
 
-            {/* Scrollable List (Ranks 4+) */}
+            {/* ── Rankings list (4 +) ────────────────────── */}
             <View style={styles.listSection}>
-              <Text style={styles.listTitle}>Rankings</Text>
+              <View style={styles.listHeader}>
+                <Ionicons name="list" size={18} color={COLORS.textSecondary} />
+                <Text style={styles.listTitle}>Rankings</Text>
+              </View>
+
               {restPlayers.map((player, index) => {
                 const rank = index + 4;
-                const isMe = player._id === currentUserId || player.email === currentUserId;
+                const isMe =
+                  player._id === currentUserId ||
+                  player.email === currentUserId;
                 return (
-                  <View 
-                    key={player._id} 
-                    style={[
-                      styles.playerRow,
-                      isMe && styles.playerRowHighlight
-                    ]}
+                  <View
+                    key={player._id}
+                    style={[styles.playerCard, isMe && styles.playerCardMe]}
                   >
-                    <Text style={styles.rankText}>{rank}</Text>
-                    <View style={styles.playerAvatar}>
-                      <Text style={styles.playerAvatarText}>
+                    <Text style={styles.cardRank}>{rank}</Text>
+
+                    <View style={styles.cardAvatar}>
+                      <Text style={styles.cardAvatarText}>
                         {player.full_name?.charAt(0)?.toUpperCase() || '?'}
                       </Text>
                     </View>
-                    <View style={styles.playerDetails}>
-                      <Text style={styles.playerName}>{player.full_name}</Text>
-                      <Text style={styles.playerUsername}>{getUsername(player)}</Text>
+
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.cardName}>{player.full_name}</Text>
+                      <Text style={styles.cardUsername}>
+                        {getUsername(player)}
+                      </Text>
                     </View>
-                    <Text style={styles.playerXP}>{player.xp}</Text>
+
+                    <Text style={styles.cardXp}>
+                      <Ionicons name="flash" size={14} color={COLORS.emerald} />{' '}
+                      {player.xp}
+                    </Text>
                   </View>
                 );
               })}
@@ -250,7 +353,7 @@ export default function LeaderboardScreen() {
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* Fixed "My Ranking" Bar at Bottom */}
+          {/* ── Fixed "My Ranking" bar ───────────────────── */}
           {myRank && (
             <View style={styles.myRankBar}>
               <LinearGradient
@@ -282,7 +385,9 @@ export default function LeaderboardScreen() {
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  /* ── Shell ─────────────────────── */
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -290,7 +395,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   headerTitle: {
     fontSize: 32,
@@ -298,267 +403,206 @@ const styles = StyleSheet.create({
     color: '#FFF',
     marginBottom: 16,
   },
-  tabSwitcher: {
+
+  /* ── Toggle pill ───────────────── */
+  toggleBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(30, 41, 59, 0.9)',
-    borderRadius: 16,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    backgroundColor: 'rgba(30,41,59,0.85)',
+    borderRadius: 14,
+    padding: 3,
   },
-  tab: {
+  togglePillActive: {
     flex: 1,
-    paddingVertical: 12,
+    borderRadius: 11,
+  },
+  togglePillInner: {
+    paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 12,
   },
-  tabActive: {
-    backgroundColor: COLORS.emerald,
+  togglePillInactive: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 11,
   },
-  tabText: {
-    color: '#94A3B8',
+  toggleTextActive: {
+    color: '#FFF',
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
   },
-  tabTextActive: {
+  toggleTextInactive: {
     color: '#FFF',
+    fontSize: 14,
+    fontFamily: 'Nunito-Bold',
+    opacity: 0.6,
   },
+
+  /* ── Loading ───────────────────── */
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
-    flex: 1,
-  },
-  podiumStage: {
-    paddingVertical: 32,
-    paddingHorizontal: 20,
-    marginHorizontal: 16,
+  content: { flex: 1 },
+
+  /* ── Podium section ────────────── */
+  podiumSection: {
+    paddingTop: 20,
+    paddingBottom: 4,
+    marginHorizontal: 12,
     marginBottom: 24,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(46, 204, 113, 0.2)',
   },
-  podiumContainer: {
+  podiumRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  podiumPlayer: {
+  podiumColumn: {
     flex: 1,
     alignItems: 'center',
   },
-  podiumWinner: {
-    marginHorizontal: 8,
-  },
-  crownContainer: {
-    position: 'absolute',
-    top: -10,
-    zIndex: 10,
-  },
+
+  /* ── Avatar ────────────────────── */
   podiumAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    backgroundColor: COLORS.cardBg,
-  },
-  avatar1st: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderColor: COLORS.gold,
     borderWidth: 4,
-    shadowColor: COLORS.gold,
+    backgroundColor: COLORS.cardBg,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  avatar2nd: {
-    borderColor: COLORS.silver,
-  },
-  avatar3rd: {
-    borderColor: COLORS.bronze,
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
+    elevation: 14,
   },
   podiumAvatarText: {
-    fontSize: 28,
     fontFamily: 'Nunito-Bold',
     color: '#FFF',
   },
-  winnerAvatarText: {
-    fontSize: 40,
-  },
-  rankBadge1st: {
-    position: 'absolute',
-    bottom: 48,
-    right: 0,
-    backgroundColor: COLORS.gold,
-    borderRadius: 14,
-    width: 28,
-    height: 28,
+
+  /* ── Rank badge ────────────────── */
+  rankBadge: {
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: COLORS.background,
   },
-  rankBadge2nd: {
-    position: 'absolute',
-    bottom: 48,
-    right: 4,
-    backgroundColor: COLORS.silver,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.background,
-  },
-  rankBadge3rd: {
-    position: 'absolute',
-    bottom: 48,
-    right: 4,
-    backgroundColor: COLORS.bronze,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.background,
-  },
-  rankNumber: {
+  rankBadgeText: {
     color: '#FFF',
     fontSize: 12,
     fontFamily: 'Nunito-Bold',
   },
+
+  /* ── Pedestal (solid gradient) ── */
   pedestal: {
-    marginTop: 12,
-    borderRadius: 8,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
   },
-  pedestal1st: {
-    width: 70,
-    height: 70,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    borderWidth: 2,
-    borderColor: COLORS.gold,
+  pedestalName: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'Nunito-Bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  pedestal2nd: {
-    width: 60,
-    height: 50,
-    backgroundColor: 'rgba(192, 192, 192, 0.15)',
-    borderWidth: 2,
-    borderColor: COLORS.silver,
+  pedestalXpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 4,
   },
-  pedestal3rd: {
-    width: 60,
-    height: 40,
-    backgroundColor: 'rgba(205, 127, 50, 0.15)',
-    borderWidth: 2,
-    borderColor: COLORS.bronze,
-  },
-  podiumName: {
+  pedestalXpText: {
     color: '#FFF',
     fontSize: 13,
     fontFamily: 'Nunito-Bold',
-    marginTop: 10,
-    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  winnerName: {
-    fontSize: 16,
-    fontFamily: 'Nunito-Bold',
-  },
-  xpPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  winnerXPPill: {
-    marginTop: 8,
-  },
-  xpPillText: {
-    fontSize: 13,
-    fontFamily: 'Nunito-Bold',
-  },
+
+  /* ── Rankings list ─────────────── */
   listSection: {
     paddingHorizontal: 20,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
   },
   listTitle: {
     fontSize: 18,
     fontFamily: 'Nunito-Bold',
     color: '#FFF',
-    marginBottom: 12,
   },
-  playerRow: {
+
+  /* ── Player card (glassmorphism) ─ */
+  playerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
     padding: 14,
-    borderRadius: 14,
     marginBottom: 10,
   },
-  playerRowHighlight: {
-    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+  playerCardMe: {
+    backgroundColor: 'rgba(46,204,113,0.12)',
+    borderWidth: 1.5,
     borderColor: COLORS.emerald,
-    borderWidth: 2,
   },
-  rankText: {
-    color: '#94A3B8',
+  cardRank: {
+    color: COLORS.textSecondary,
     fontSize: 16,
     fontFamily: 'Nunito-Bold',
     width: 32,
+    textAlign: 'center',
   },
-  playerAvatar: {
+  cardAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 2,
-    borderColor: COLORS.cardBorder,
+    backgroundColor: '#334155',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  playerAvatarText: {
+  cardAvatarText: {
     fontSize: 18,
     fontFamily: 'Nunito-Bold',
     color: '#FFF',
   },
-  playerDetails: {
-    flex: 1,
-  },
-  playerName: {
+  cardInfo: { flex: 1 },
+  cardName: {
     color: '#FFF',
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
   },
-  playerUsername: {
-    color: '#94A3B8',
+  cardUsername: {
+    color: COLORS.textSecondary,
     fontSize: 12,
     fontFamily: 'Nunito-Regular',
     marginTop: 2,
   },
-  playerXP: {
+  cardXp: {
     color: COLORS.emerald,
     fontSize: 15,
     fontFamily: 'Nunito-Bold',
   },
+
+  /* ── My-rank bar ───────────────── */
   myRankBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(46, 204, 113, 0.3)',
+    borderTopColor: 'rgba(46,204,113,0.3)',
   },
   myRankGradient: {
     paddingVertical: 16,
@@ -575,7 +619,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   myRankBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 8,

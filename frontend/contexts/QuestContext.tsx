@@ -1,6 +1,7 @@
 // frontend/contexts/QuestContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUser } from './UserContext';
 
 // ─── Types ───────────────────────────────────────────────────────
 export type QuestType = 'sign' | 'xp' | 'lesson' | 'quiz';
@@ -67,8 +68,8 @@ const QUEST_POOL: QuestTemplate[] = [
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────
-const STORAGE_KEY_QUESTS = 'dailyQuests_v2';
-const STORAGE_KEY_DATE = 'dailyQuests_date_v2';
+const BASE_KEY_QUESTS = 'dailyQuests_v2';
+const BASE_KEY_DATE = 'dailyQuests_date_v2';
 
 /** Shuffle an array (Fisher-Yates) and take first N */
 function pickRandom<T>(arr: T[], n: number): T[] {
@@ -116,23 +117,36 @@ export const useQuests = () => useContext(QuestContext);
 
 // ─── Provider ────────────────────────────────────────────────────
 export function QuestProvider({ children }: { children: React.ReactNode }) {
+  const { userEmail } = useUser();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const questsRef = useRef<Quest[]>([]);
+  const emailRef = useRef('');
 
-  // Keep ref in sync so our callback always sees latest
+  // Keep refs in sync so callbacks always see latest values
   useEffect(() => { questsRef.current = quests; }, [quests]);
+  useEffect(() => { emailRef.current = userEmail; }, [userEmail]);
 
-  // ── Load / rotate on mount ──
+  // Build user-namespaced keys
+  const questsKey = userEmail ? `${userEmail}_${BASE_KEY_QUESTS}` : '';
+  const dateKey = userEmail ? `${userEmail}_${BASE_KEY_DATE}` : '';
+
+  // ── Load / rotate when user changes or on mount ──
   useEffect(() => {
+    if (!userEmail) {
+      // No user – clear quests
+      setQuests([]);
+      setLoading(false);
+      return;
+    }
     (async () => {
       try {
-        const savedDate = await AsyncStorage.getItem(STORAGE_KEY_DATE);
+        const savedDate = await AsyncStorage.getItem(dateKey);
         const today = todayKey();
 
         if (savedDate === today) {
           // Same day → restore quests
-          const raw = await AsyncStorage.getItem(STORAGE_KEY_QUESTS);
+          const raw = await AsyncStorage.getItem(questsKey);
           if (raw) {
             setQuests(JSON.parse(raw));
           } else {
@@ -154,11 +168,13 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [userEmail]);
 
   const persist = async (q: Quest[], date: string) => {
-    await AsyncStorage.setItem(STORAGE_KEY_QUESTS, JSON.stringify(q));
-    await AsyncStorage.setItem(STORAGE_KEY_DATE, date);
+    const email = emailRef.current;
+    if (!email) return;
+    await AsyncStorage.setItem(`${email}_${BASE_KEY_QUESTS}`, JSON.stringify(q));
+    await AsyncStorage.setItem(`${email}_${BASE_KEY_DATE}`, date);
   };
 
   // ── Public: bump progress ──
@@ -174,7 +190,10 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
         };
       });
       // Persist in background
-      AsyncStorage.setItem(STORAGE_KEY_QUESTS, JSON.stringify(updated)).catch(() => {});
+      const email = emailRef.current;
+      if (email) {
+        AsyncStorage.setItem(`${email}_${BASE_KEY_QUESTS}`, JSON.stringify(updated)).catch(() => {});
+      }
       return updated;
     });
   }, []);
@@ -185,7 +204,10 @@ export function QuestProvider({ children }: { children: React.ReactNode }) {
       const updated = prev.map(q =>
         q.id === questId && q.completed && !q.claimed ? { ...q, claimed: true } : q,
       );
-      AsyncStorage.setItem(STORAGE_KEY_QUESTS, JSON.stringify(updated)).catch(() => {});
+      const email = emailRef.current;
+      if (email) {
+        AsyncStorage.setItem(`${email}_${BASE_KEY_QUESTS}`, JSON.stringify(updated)).catch(() => {});
+      }
       return updated;
     });
   }, []);

@@ -106,10 +106,25 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('userToken', response.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
 
-        // Save server-side streak to local storage so UserContext picks it up
-        const serverStreak = response.data.user.streak || 0;
-        if (serverStreak > 0) {
-          await AsyncStorage.setItem('dayStreak', String(serverStreak));
+        // Save server-side stats to user-namespaced local storage so UserContext picks them up
+        const user = response.data.user;
+        const userEmail = user.email;
+        if (userEmail) {
+          const serverStreak = user.streak || 0;
+          if (serverStreak > 0) {
+            await AsyncStorage.setItem(`${userEmail}_dayStreak`, String(serverStreak));
+          }
+          if (user.completed_lessons?.length) {
+            await AsyncStorage.setItem(`${userEmail}_lessonProgress`, JSON.stringify(user.completed_lessons));
+          }
+          // Note: signsLearned is stored locally as a JSON word-array, not a number.
+          // We don't overwrite it here; the server count is used as fallback in UserContext.
+          if (user.quizzes_taken > 0) {
+            await AsyncStorage.setItem(`${userEmail}_quizzesAttempted`, String(user.quizzes_taken));
+          }
+          if (user.time_spent > 0) {
+            await AsyncStorage.setItem(`${userEmail}_timeSpentMinutes`, String(user.time_spent));
+          }
         }
 
         // Reload context from fresh AsyncStorage data, then sync with server
@@ -118,7 +133,6 @@ export default function LoginScreen() {
         syncProgressToBackend();   // non-blocking – pushes streak/weak_signs
 
         // Check if THIS specific user has completed onboarding (user-specific key)
-        const userEmail = response.data.user.email;
         const onboardingKey = `hasCompletedOnboarding_${userEmail}`;
         const hasCompletedOnboarding = await AsyncStorage.getItem(onboardingKey);
         
